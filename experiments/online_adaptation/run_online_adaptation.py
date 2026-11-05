@@ -17,7 +17,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import torch
-import torch.nn.functional as F
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
@@ -189,11 +188,7 @@ def main() -> None:
     static = copy.deepcopy(model).to(device).eval()
 
     # Keep targets segregated from the adaptation function and its inputs.
-    packed_stream, heldout_targets = [], []
-    for i in range(len(dataset)):
-        packed, target = dataset[i]
-        packed_stream.append(packed)
-        heldout_targets.append(target.numpy())
+    packed_stream = [dataset[i][0] for i in range(len(dataset))]
     chunks = [packed_stream[i:i+BATCH_SIZE] for i in range(0, len(packed_stream), BATCH_SIZE)]
     predictions_static, predictions_adapted, targets, rows = [], [], [], []
     previous_chunk = None
@@ -224,12 +219,10 @@ def main() -> None:
         adapted_pred = infer(model, current)
         start = chunk_index * BATCH_SIZE
         end = start + len(chunk)
-        current_targets = heldout_targets[start:end]
-        # Scoring occurs only after both inference paths have completed.
-        for j, (sp, ap, target) in enumerate(zip(static_pred, adapted_pred, current_targets)):
+        # No target is read or retained during stream adaptation or inference.
+        for j, (sp, ap) in enumerate(zip(static_pred, adapted_pred)):
             predictions_static.append(sp)
             predictions_adapted.append(ap)
-            targets.append(target)
             row = test_meta.iloc[start+j]
             rows.append({
                 "sample_index": start+j,
@@ -244,7 +237,9 @@ def main() -> None:
             })
         previous_chunk = chunk
 
-    target_array = np.asarray(targets)
+    # Only after every online update and prediction is complete do we load labels
+    # for the offline evaluation stage.
+    target_array = np.asarray([dataset[i][1].numpy() for i in range(len(dataset))])
     static_array = np.asarray(predictions_static)
     adapted_array = np.asarray(predictions_adapted)
     score_rows = []
