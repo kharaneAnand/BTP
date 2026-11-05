@@ -112,7 +112,8 @@ def self_supervised_objective(
 
 def adapt_from_past_observations(
     model: OAMPDLDetector,
-    past_packed: torch.Tensor,
+    adaptation_packed: torch.Tensor,
+    guard_packed: torch.Tensor,
     device: torch.device,
 ) -> dict:
     """Update scalar controls using received samples only; no tx symbols accepted."""
@@ -128,12 +129,12 @@ def adapt_from_past_observations(
         if parameter.requires_grad:
             params.append(parameter)
     optimizer = torch.optim.AdamW(params, lr=ADAPT_LR, weight_decay=1e-4)
-    before = float(self_supervised_objective(model, past_packed, anchor).detach().cpu())
+    before = float(self_supervised_objective(model, guard_packed, anchor).detach().cpu())
     history = []
     for step in range(ADAPT_STEPS):
         model.train()
         optimizer.zero_grad(set_to_none=True)
-        loss = self_supervised_objective(model, past_packed, anchor)
+        loss = self_supervised_objective(model, adaptation_packed, anchor)
         if not torch.isfinite(loss):
             model.load_state_dict(before_state)
             return {"accepted": False, "reason": "non_finite_loss", "loss_before": before}
@@ -142,7 +143,7 @@ def adapt_from_past_observations(
         optimizer.step()
         history.append(float(loss.detach().cpu()))
     model.eval()
-    after = float(self_supervised_objective(model, past_packed, anchor).detach().cpu())
+    after = float(self_supervised_objective(model, guard_packed, anchor).detach().cpu())
     drift = float(torch.sqrt(torch.cat([
         (parameter.detach() - anchor[name]).reshape(-1)
         for name, parameter in model.named_parameters() if name in TRAINABLE
@@ -235,7 +236,7 @@ def main() -> None:
             nis = float(normalized_innovation(model, past).mean().cpu())
             if nis > trigger_threshold:
                 adapt_count += 1
-                result = adapt_from_past_observations(model, past, device)
+                result = adapt_from_past_observations(model, past[:6], past[6:], device)
                 accepted_count += int(result["accepted"])
                 rejected_count += int(not result["accepted"])
                 action = "ADAPT"
