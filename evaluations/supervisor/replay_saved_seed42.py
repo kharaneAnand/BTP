@@ -109,6 +109,11 @@ def main() -> None:
     with log_path.open(newline="", encoding="utf-8") as file:
         for row in csv.DictReader(file):
             index = int(row["sample_index"])
+            if controller.active_model != row["active_model_before"]:
+                raise ValueError(
+                    "Saved per-frame margins no longer match the replayed controller state; "
+                    "the original raw V1 frames are required for a fresh inference run."
+                )
             candidate_margins = json.loads(row["candidate_confidence_margins"] or "{}")
             decision = controller.step(
                 active_margin=float(row["active_confidence_margin"]),
