@@ -38,3 +38,8 @@ Report static versus online-adapted OAMP-DL BER, SER and NMSE, paired condition-
 - The receiver-input loader reads only received DD observations and pilot-derived channel estimates. It does not access transmitted symbols during adaptation or inference.
 - The current implementation still uses simulator-configured SNR to construct the noise-power input. This is a known simulator-information dependency, not a deployable noise estimator.
 - The workflow is an experiment runner, not evidence of a successful result. No result should be added to the paper until the four fresh seeds complete and the paired test comparison is reviewed.
+
+
+## Pilot correction log
+
+An initial pilot implementation compared an eight-frame test-window mean with a per-frame validation 90th-percentile threshold. On seed 52 this mismatch yielded zero triggers (the validation per-frame threshold was 10.44, while the largest observed test-window mean was 8.60). That pilot is not treated as a successful adaptation result. The trigger statistic has been corrected to compare like with like: the 90th percentile of eight-frame validation-window means versus each eight-frame test-window mean. The corrected four-seed run is the only run eligible for interpretation; do not pool or combine pilot outputs with corrected runs.
