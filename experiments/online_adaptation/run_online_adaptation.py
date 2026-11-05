@@ -218,7 +218,7 @@ def main() -> None:
     # Calibrate the trigger using validation observations only, without tx labels.
     validation_packed = pack_observation_only(validation_meta, raw_dir, run_config)
     validation_window_scores = []
-    for start in range(0, len(validation_packed), BATCH_SIZE):
+    for start in range(0, len(validation_packed) - BATCH_SIZE + 1, BATCH_SIZE):
         batch = torch.stack(validation_packed[start:start+BATCH_SIZE]).to(device)
         frame_scores = normalized_innovation(model, batch).cpu().numpy()
         validation_window_scores.append(float(frame_scores.mean()))
