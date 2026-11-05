@@ -1,0 +1,54 @@
+name: Specialist receiver and validation-calibrated routing
+
+on:
+  push:
+    branches:
+      - "research/specialist-router-final"
+    paths:
+      - "experiments/specialist_router/**"
+      - ".github/workflows/specialist-router.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  specialist-routing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [45, 46]
+    steps:
+      - name: Checkout BTP research branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install numerical dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pandas PyYAML scipy matplotlib textremo-toolbox
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Train regime specialists and evaluate validation-calibrated router
+        env:
+          PYTHONPATH: .
+          OMP_NUM_THREADS: "2"
+          MKL_NUM_THREADS: "2"
+        run: |
+          python experiments/specialist_router/run_specialist_router.py \
+            --seed ${{ matrix.seed }} \
+            --device cpu \
+            --output-dir experiments/specialist_router/results/seed${{ matrix.seed }}
+      - name: Upload independent specialist-routing results
+        uses: actions/upload-artifact@v4
+        with:
+          name: specialist-router-seed-${{ matrix.seed }}
+          path: |
+            experiments/specialist_router/results/seed${{ matrix.seed }}/summary.json
+            experiments/specialist_router/results/seed${{ matrix.seed }}/decision_log.csv
+            experiments/specialist_router/results/seed${{ matrix.seed }}/validation_receiver_metrics.csv
+            experiments/specialist_router/results/seed${{ matrix.seed }}/test_receiver_metrics.csv
+            experiments/specialist_router/results/seed${{ matrix.seed }}/checkpoints/*.pt
+          if-no-files-found: error
