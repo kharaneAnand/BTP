@@ -34,3 +34,16 @@ The workflow runs on CPU, saves specialist checkpoints, validation/test per-rece
 The first clean two-seed evaluation produced a pooled, condition-stratified paired BER difference of -0.00013084 (95% CI [-0.00023148, -0.00004026]) and SER difference of -0.00025161 (95% CI [-0.00044283, -0.00008052]). The pooled NMSE difference was -0.00014338 (95% CI [-0.00033376, 0.00003163]). Seed 45's individual BER interval crossed zero, while seed 46's did not. Therefore, the original strict per-seed success criterion is not fully satisfied, even though the pooled BER/SER comparison is favorable.
 
 To assess reproducibility without tuning on the test sets, the exact same code, checkpoint initialization, learning rate, specialist training epochs, router features, and ridge regularization are frozen and run on two additional independent seeds, 47 and 48. No hyperparameter changes are permitted after inspecting seeds 45/46. These are confirmatory replications, not a new tuned model.
+
+
+## Four-seed frozen-method evaluation (final report result)
+
+The same code and hyperparameters were run on independent seeds 47 and 48 without modification. Across seeds 45--48 (540 test frames), the pooled paired, condition-stratified bootstrap results are:
+
+- BER: static 0.03697665, routed 0.03689110; routed-minus-static -0.00008555, 95% CI [-0.00014845, -0.00002516].
+- SER: static 0.07033514, routed 0.07017411; difference -0.00016103, 95% CI [-0.00028180, -0.00004529].
+- NMSE: static 0.11257751, routed 0.11250080; difference -0.00007672, 95% CI [-0.00018562, 0.00002388].
+- Decisions: KEEP 126, SWITCH 414, ADAPT 0. All three specialists were selected across the four seeds.
+- The pooled router closes approximately 23.8% of the per-frame oracle BER gap. The oracle remains an unattainable test-label upper bound.
+
+Seed-level results are heterogeneous. Seeds 46 and 47 have individually significant BER reductions; seed 45 is inconclusive, and seed 48 has a small positive routed-minus-static BER mean with a confidence interval crossing zero. Thus the pooled BER/SER gains are statistically supported, but the strict original per-seed success criterion is not met and improvement is not guaranteed on every seed. NMSE remains inconclusive in the pooled analysis. This mixed result is reported explicitly rather than claiming a universal win.
