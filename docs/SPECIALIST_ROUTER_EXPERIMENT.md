@@ -12,8 +12,8 @@ The independent per-frame audit shows that the bank has limited but non-zero com
 - Keep the existing generalist OAMP-DL checkpoint frozen as the baseline.
 - Initialize three separate OAMP-DL specialists from that checkpoint. Fine-tune each on the training split only, using the 30, 120, or 500 km/h training regimes respectively. No validation or test labels enter gradient updates.
 - Evaluate the generalist and all three specialists on validation and test frames.
-- Fit a separate ridge regression calibration model for each candidate using validation-only BER targets and inference-available features: pilot-based channel-matrix statistics, received-observation energy, candidate-output confidence, and candidate residual consistency.
-- At test time, select the candidate with the lowest predicted BER. The router receives neither velocity labels nor transmitted symbols nor test BER.
+- Fit a separate ridge regression calibration model for each candidate using validation-only BER targets and inference-available features: pilot-based channel-matrix statistics, received-observation energy, candidate-output confidence, and candidate residual consistency. The router feature vector excludes simulator SNR and velocity labels.
+- At test time, select the candidate with the lowest predicted BER. The router receives neither velocity labels nor SNR labels nor transmitted symbols nor test BER. The receiver network itself still consumes a noise-variance input; the current simulator derives that input from configured SNR, so deployment requires a pilot/noise estimator and this assumption is stated as a limitation.
 - Compare the routed receiver with always-generalist OAMP-DL. Report the paired difference and a condition-stratified bootstrap 95% interval.
 - Report the per-frame oracle only as an unattainable upper bound. It uses test labels and is never used for routing.
 
@@ -27,4 +27,4 @@ The specialist system is considered to improve only if the routed test BER is lo
 
 ## Reproducibility and limitations
 
-The workflow runs on CPU, saves specialist checkpoints, validation/test per-receiver metrics, decision logs, and summaries as GitHub Actions artifacts. This is a simulated OTFS study with the existing V1 channel generator and fixed pilot/channel-estimation model; results should not be generalized to measured radio hardware without a separate experimental campaign.
+The workflow runs on CPU, saves specialist checkpoints, validation/test per-receiver metrics, decision logs, and summaries as GitHub Actions artifacts. This is a simulated OTFS study with the existing V1 channel generator and fixed pilot/channel-estimation model. The OAMP-DL detector still receives the configured noise variance from the simulator, rather than an independently estimated noise variance; results should not be generalized to measured radio hardware without a separate experimental campaign.
