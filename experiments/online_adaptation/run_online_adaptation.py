@@ -24,12 +24,12 @@ sys.path.insert(0, str(ROOT))
 from models.oamp.oamp_dl import OAMPDLDetector
 from run_pipeline import prepare_generated_dataset
 from src.config.loader import load_config
-from training.oamp.dataset import OAMPDataset
+from src.receivers.mmse import build_data_observation
 
 
 TRAINABLE = {"step_logits", "damping_logits", "variance_logits"}
 BATCH_SIZE = 8
-TRIGGER_NIS = 1.5
+TRIGGER_QUANTILE = 0.90
 ADAPT_STEPS = 5
 ADAPT_LR = 2e-4
 ANCHOR_WEIGHT = 0.02
@@ -52,6 +52,33 @@ def qpsk_metrics(pred: np.ndarray, target: np.ndarray) -> tuple[float, float, fl
         float(np.any(errors, axis=-1).mean()),
         float(np.sum(np.abs(pred-target)**2) / max(np.sum(np.abs(target)**2), 1e-12)),
     )
+
+
+def pack_observation_only(metadata: pd.DataFrame, raw_dir: Path, config) -> list[torch.Tensor]:
+    """Load receiver inputs only; never open tx_dd during adaptation/inference."""
+    packed_samples = []
+    for _, row in metadata.reset_index(drop=True).iterrows():
+        with np.load(raw_dir / str(row["file"]), allow_pickle=False) as sample:
+            rx_dd = np.asarray(sample["rx_dd"])
+            h_hat = np.asarray(sample["h_hat"])
+        noise_power = 10.0 ** (-float(row["snr_db"]) / 10.0)
+        y_data = build_data_observation(rx_dd, config)
+        packed = np.concatenate((
+            y_data.reshape(-1),
+            h_hat.reshape(-1),
+            np.asarray([noise_power], dtype=np.complex64),
+        )).astype(np.complex64)
+        packed_samples.append(torch.from_numpy(packed))
+    return packed_samples
+
+
+def load_targets_after_stream(metadata: pd.DataFrame, raw_dir: Path) -> np.ndarray:
+    """Open transmitted symbols only after all predictions and updates are complete."""
+    targets = []
+    for _, row in metadata.reset_index(drop=True).iterrows():
+        with np.load(raw_dir / str(row["file"]), allow_pickle=False) as sample:
+            targets.append(np.asarray(sample["tx_dd"], dtype=np.complex64))
+    return np.asarray(targets)
 
 
 def normalized_innovation(model: OAMPDLDetector, packed: torch.Tensor) -> torch.Tensor:
@@ -172,10 +199,10 @@ def main() -> None:
     raw_dir, _, full_meta, run_config = prepare_generated_dataset(
         config, output / "generated", args.seed
     )
+    validation_meta = full_meta.loc[full_meta.split == "validation"].reset_index(drop=True)
     test_meta = full_meta.loc[full_meta.split == "test"].sample(
         frac=1.0, random_state=args.seed
     ).reset_index(drop=True)
-    dataset = OAMPDataset(test_meta, raw_dir, run_config)
     obs = int(run_config.representation.expected_channel_shape.rows)
     symbols = int(run_config.representation.expected_channel_shape.cols)
     iterations = int(run_config.oamp_dl.iterations)
@@ -187,8 +214,16 @@ def main() -> None:
     model.load_state_dict(checkpoint["model_state_dict"])
     static = copy.deepcopy(model).to(device).eval()
 
-    # Keep targets segregated from the adaptation function and its inputs.
-    packed_stream = [dataset[i][0] for i in range(len(dataset))]
+    # Calibrate the trigger using validation observations only, without tx labels.
+    validation_packed = pack_observation_only(validation_meta, raw_dir, run_config)
+    validation_scores = []
+    for start in range(0, len(validation_packed), BATCH_SIZE):
+        batch = torch.stack(validation_packed[start:start+BATCH_SIZE]).to(device)
+        validation_scores.extend(normalized_innovation(model, batch).cpu().numpy().tolist())
+    trigger_threshold = float(np.quantile(validation_scores, TRIGGER_QUANTILE))
+
+    # Randomized held-out stream. Only rx_dd, h_hat and configured noise are loaded.
+    packed_stream = pack_observation_only(test_meta, raw_dir, run_config)
     chunks = [packed_stream[i:i+BATCH_SIZE] for i in range(0, len(packed_stream), BATCH_SIZE)]
     predictions_static, predictions_adapted, targets, rows = [], [], [], []
     previous_chunk = None
@@ -198,7 +233,7 @@ def main() -> None:
         if previous_chunk is not None:
             past = torch.stack(previous_chunk).to(device)
             nis = float(normalized_innovation(model, past).mean().cpu())
-            if nis > TRIGGER_NIS:
+            if nis > trigger_threshold:
                 adapt_count += 1
                 result = adapt_from_past_observations(model, past, device)
                 accepted_count += int(result["accepted"])
@@ -239,7 +274,7 @@ def main() -> None:
 
     # Only after every online update and prediction is complete do we load labels
     # for the offline evaluation stage.
-    target_array = np.asarray([dataset[i][1].numpy() for i in range(len(dataset))])
+    target_array = load_targets_after_stream(test_meta, raw_dir)
     static_array = np.asarray(predictions_static)
     adapted_array = np.asarray(predictions_adapted)
     score_rows = []
@@ -264,9 +299,11 @@ def main() -> None:
         "test_frames": len(results),
         "adaptation_protocol": "causal past-window decision-directed self-supervision",
         "adaptation_input_contract": "packed received y, estimated H, and noise only; no transmitted symbols",
+        "target_symbols_loaded_during_adaptation_or_inference": False,
         "target_symbols_used_for_adaptation": False,
         "current_or_future_frame_used_to_update_its_own_detector": False,
-        "adaptation_trigger_normalized_innovation_threshold": TRIGGER_NIS,
+        "adaptation_trigger_normalized_innovation_threshold": trigger_threshold,
+        "trigger_threshold_calibration": f"validation-only {TRIGGER_QUANTILE:.0%} quantile",
         "batch_size": BATCH_SIZE,
         "adaptation_steps": ADAPT_STEPS,
         "trainable_parameters": sorted(TRAINABLE),
