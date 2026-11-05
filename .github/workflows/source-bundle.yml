@@ -5,6 +5,10 @@ on:
     branches:
       - "research/**"
 
+concurrency:
+  group: source-bundle-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
