@@ -10,7 +10,7 @@ The previous few-shot script optimized OAMP-DL against `tx_dd` targets from a la
 - Keep the generalist OAMP-DL checkpoint frozen as the static baseline.
 - Randomize the held-out test stream order deterministically per seed to mix the nine SNR/velocity conditions.
 - Process frames in batches of eight. The first batch is warm-up and is detected with the unchanged model.
-- Before processing each subsequent batch, compute normalized innovation on the *previous* batch. Calibrate the trigger from the 90th percentile of normalized innovation on the validation split only; if the previous batch exceeds this frozen threshold, attempt an update.
+- Before processing each subsequent batch, compute normalized innovation on the *previous* batch. Calibrate the trigger from the 90th percentile of *eight-frame validation-window mean* normalized innovation scores; compare each previous test-window mean with this frozen threshold. Matching the window aggregation avoids comparing a test-batch mean with a per-frame quantile.
 - Split each previous eight-frame batch into six adaptation frames and two guard frames. Update only the existing OAMP-DL scalar controls (step, damping, variance logits) for five AdamW steps using the six adaptation frames; accept only if the self-supervised objective also improves on the two guard frames.
 - The self-supervised objective combines normalized observation consistency, a QPSK constellation prior, and an anchor penalty to the pre-update parameters. The two guard frames are never used for gradient updates and provide an out-of-update-batch acceptance check.
 - Accept an update only if the objective decreases and relative parameter drift stays below 20%; otherwise roll back.
@@ -33,7 +33,7 @@ Report static versus online-adapted OAMP-DL BER, SER and NMSE, paired condition-
 
 ## Implementation audit notes
 
-- Trigger threshold is calibrated once from validation-only normalized-innovation scores (90th percentile); it is frozen before test-stream evaluation.
+- Trigger threshold is calibrated once from validation-only eight-frame window-mean normalized-innovation scores (90th percentile); it is frozen before test-stream evaluation.
 - The held-out stream order is randomized deterministically using the experiment seed.
 - The receiver-input loader reads only received DD observations and pilot-derived channel estimates. It does not access transmitted symbols during adaptation or inference.
 - The current implementation still uses simulator-configured SNR to construct the noise-power input. This is a known simulator-information dependency, not a deployable noise estimator.
