@@ -1,4 +1,4 @@
-name: Causal self-supervised OAMP-DL online adaptation # guard-split-v2
+name: Causal self-supervised OAMP-DL online adaptation # guard-split-window-threshold-v3
 
 on:
   push:
