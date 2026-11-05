@@ -11,8 +11,8 @@ The previous few-shot script optimized OAMP-DL against `tx_dd` targets from a la
 - Randomize the held-out test stream order deterministically per seed to mix the nine SNR/velocity conditions.
 - Process frames in batches of eight. The first batch is warm-up and is detected with the unchanged model.
 - Before processing each subsequent batch, compute normalized innovation on the *previous* batch. Calibrate the trigger from the 90th percentile of normalized innovation on the validation split only; if the previous batch exceeds this frozen threshold, attempt an update.
-- Update only the existing OAMP-DL scalar controls (step, damping, variance logits) for five AdamW steps using the previous batch's received observation, estimated channel and noise variance.
-- The self-supervised objective combines normalized observation consistency, a QPSK constellation prior, and an anchor penalty to the pre-update parameters.
+- Split each previous eight-frame batch into six adaptation frames and two guard frames. Update only the existing OAMP-DL scalar controls (step, damping, variance logits) for five AdamW steps using the six adaptation frames; accept only if the self-supervised objective also improves on the two guard frames.
+- The self-supervised objective combines normalized observation consistency, a QPSK constellation prior, and an anchor penalty to the pre-update parameters. The two guard frames are never used for gradient updates and provide an out-of-update-batch acceptance check.
 - Accept an update only if the objective decreases and relative parameter drift stays below 20%; otherwise roll back.
 - The observation loader opens only `rx_dd` and `h_hat` while adapting and inferring; it does not load `tx_dd`. Transmitted symbols are opened only after every test-stream prediction and update has completed, for offline BER/SER/NMSE scoring.
 - The current batch is never used to update the model that detects that same batch. Updates use only past windows, making the experiment causal at the batch level.
