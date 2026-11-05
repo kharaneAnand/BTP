@@ -59,6 +59,11 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install numpy pandas PyYAML scipy matplotlib textremo-toolbox
           python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Replay saved seed-42 test decisions with validation-only BER gate
+        env:
+          PYTHONPATH: .
+        run: |
+          python evaluations/supervisor/replay_saved_seed42.py
       - name: Generate independent seed-43 dataset and evaluate
         env:
           PYTHONPATH: .
@@ -74,6 +79,8 @@ jobs:
         with:
           name: btp-controller-evaluation
           path: |
+            experiments/reliability_controller/validation_gate_replay.json
+            experiments/reliability_controller/validation_gate_replay.csv
             experiments/pipeline_runs/seed43_independent/summary.json
             experiments/pipeline_runs/seed43_independent/decision_log.csv
             experiments/pipeline_runs/seed43_independent/frames.jsonl
