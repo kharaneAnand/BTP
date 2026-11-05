@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import copy
 import json
+import random
 import sys
 from pathlib import Path
 
@@ -159,6 +160,11 @@ def main():
     args = parser.parse_args()
     if args.seed in (42,43,44):
         raise ValueError("Use a new independent seed, not a previously reported seed.")
+    random.seed(args.seed)
+    np.random.seed(args.seed)
+    torch.manual_seed(args.seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.seed)
     device = torch.device(args.device)
     if device.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA requested but unavailable.")
