@@ -459,6 +459,36 @@ def controller_log_row(record: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def stratified_bootstrap_ci(
+    values: np.ndarray,
+    conditions: list[tuple[int, int]],
+    *,
+    replicates: int = 5000,
+    seed: int = 2026,
+) -> tuple[float, float]:
+    """Percentile CI from paired resampling within each SNR/velocity cell."""
+    values = np.asarray(values, dtype=np.float64)
+    if values.ndim != 1 or len(values) != len(conditions) or len(values) < 2:
+        raise ValueError("Bootstrap values and condition labels must be aligned vectors.")
+    if not np.isfinite(values).all() or replicates < 100:
+        raise ValueError("Bootstrap inputs must be finite and use at least 100 replicates.")
+    grouped: dict[tuple[int, int], list[float]] = defaultdict(list)
+    for value, condition in zip(values, conditions):
+        grouped[condition].append(float(value))
+    if any(len(group) < 2 for group in grouped.values()):
+        raise ValueError("Every bootstrap condition must contain at least two frames.")
+    rng = np.random.default_rng(seed)
+    bootstrap_means = np.zeros(replicates, dtype=np.float64)
+    total_count = len(values)
+    for group in grouped.values():
+        array = np.asarray(group, dtype=np.float64)
+        sampled = rng.integers(0, len(array), size=(replicates, len(array)))
+        bootstrap_means += array[sampled].sum(axis=1)
+    bootstrap_means /= total_count
+    low, high = np.quantile(bootstrap_means, [0.025, 0.975])
+    return float(low), float(high)
+
+
 def write_batch_outputs(
     run_dir: Path,
     records: list[dict[str, Any]],
@@ -502,20 +532,73 @@ def write_batch_outputs(
     }
     scored_records = [index for index, metrics in enumerate(all_metrics) if metrics]
     if scored_records:
-        adaptive = [all_metrics[index][records[index]["receiver"]["used_for_this_frame"]] for index in scored_records]
+        metric_names = ("ber", "ser", "nmse")
+        adaptive = [
+            all_metrics[index][records[index]["receiver"]["used_for_this_frame"]]
+            for index in scored_records
+        ]
         oamp = [all_metrics[index]["oamp_dl"] for index in scored_records]
         summary["adaptive_pipeline"] = {
             metric: float(np.mean([row[metric] for row in adaptive]))
-            for metric in ("ber", "ser", "nmse")
+            for metric in metric_names
         }
         summary["always_oamp_dl"] = {
             metric: float(np.mean([row[metric] for row in oamp]))
-            for metric in ("ber", "ser", "nmse")
+            for metric in metric_names
         }
+        condition_labels = [
+            (
+                int(records[index]["sample"]["snr_db"]),
+                int(records[index]["sample"]["velocity_kmh"]),
+            )
+            for index in scored_records
+        ]
+        paired_differences = {
+            metric: np.asarray(
+                [adaptive[i][metric] - oamp[i][metric] for i in range(len(scored_records))],
+                dtype=np.float64,
+            )
+            for metric in metric_names
+        }
+        summary["paired_adaptive_minus_oamp_dl"] = {
+            metric: {
+                "mean": float(values.mean()),
+                "ci95_low": stratified_bootstrap_ci(
+                    values, condition_labels, seed=2026 + offset
+                )[0],
+                "ci95_high": stratified_bootstrap_ci(
+                    values, condition_labels, seed=2026 + offset
+                )[1],
+            }
+            for offset, (metric, values) in enumerate(paired_differences.items())
+        }
+        summary["confidence_interval_method"] = (
+            "95% percentile paired bootstrap, stratified within SNR/velocity condition; "
+            "5000 resamples; seed 2026"
+        )
         best_matches = []
+        metric_rows = []
         for index in scored_records:
-            best_receiver = min(all_metrics[index], key=lambda name: all_metrics[index][name]["ber"])
-            best_matches.append(records[index]["receiver"]["used_for_this_frame"] == best_receiver)
+            best_receiver = min(
+                all_metrics[index],
+                key=lambda name: all_metrics[index][name]["ber"],
+            )
+            selected_receiver = records[index]["receiver"]["used_for_this_frame"]
+            best_matches.append(selected_receiver == best_receiver)
+            sample = records[index]["sample"]
+            for receiver, values in all_metrics[index].items():
+                metric_rows.append({
+                    "sample_index": int(sample["sample_index"]),
+                    "file": str(sample["file"]),
+                    "snr_db": int(sample["snr_db"]),
+                    "velocity_kmh": int(sample["velocity_kmh"]),
+                    "receiver": receiver,
+                    "selected_for_frame": receiver == selected_receiver,
+                    **values,
+                })
+        pd.DataFrame(metric_rows).to_csv(
+            run_dir / "per_frame_receiver_metrics.csv", index=False
+        )
         summary["match_rate_to_per_frame_true_best_ber_receiver"] = float(np.mean(best_matches))
         summary["scored_frames"] = len(scored_records)
         summary["metrics_status"] = "reference_only_requires_ground_truth"
