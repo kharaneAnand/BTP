@@ -50,6 +50,20 @@ Seed 43 is a useful independently generated dataset check, but the channel/SNR/v
 
 **Action:** test separately on (i) unseen random seeds within the same distribution, (ii) held-out velocity/SNR values between and beyond training points, and (iii) channel-model shifts (path count, delay profile, Doppler spectrum, fractional-Doppler spread, pilot mismatch, and CSI estimation error). Keep all generated data in new experiment directories.
 
+### F. The original controller BER gate used test-set metrics
+
+The original `configs/reliability_controller_v1.json` populated its fixed BER gate with the same aggregate values reported by the held-out test evaluation files. Although test outcomes were not used to tune the confidence thresholds, using test-derived BER to decide which candidates are eligible still lets test labels influence routing.
+
+**Correction on this branch:** recomputed the gate values from the 135 validation rows per receiver in `experiments/reliability_detector/train_validation_features.csv`. The controller configuration now identifies the validation split as the source and explicitly states that test labels are not used to configure the gate. The held-out test split can now be used for the final policy evaluation.
+
+Validation-derived BER gate:
+- MMSE: 0.06475443
+- OAMP-DL: 0.02833132
+- Original GNN: 0.03270934
+- PI-EGNN: 0.03556763
+
+These values are calculated from saved per-frame validation metrics; they are not newly trained or newly inferred results.
+
 ## 3. Experimental roadmap (ordered by expected research value)
 
 1. **Reproducibility and audit tests**
@@ -86,6 +100,7 @@ Seed 43 is a useful independently generated dataset check, but the channel/SNR/v
 
 - Updated `models/supervisor/reliability_controller.py` to avoid unsupported adaptation recommendations and compare supported adaptation choices on standardized confidence scales.
 - Updated `tests/test_reliability_controller.py` to assert the supported-adapter behavior and the no-supported-adapter fallback.
+- Replaced the controller's test-derived BER gate with BER computed from the saved validation split (135 frames per receiver).
 
 ## 5. Validation status
 
