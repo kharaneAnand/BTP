@@ -68,8 +68,4 @@ jobs:
             experiments/pipeline_runs/seed44_independent/decision_log.csv
             experiments/pipeline_runs/seed44_independent/frames.jsonl
             experiments/pipeline_runs/seed44_independent/adapted/**/evaluation_results.json
-            experiments/pipeline_runs/seed43_independent/summary.json
-            experiments/pipeline_runs/seed43_independent/decision_log.csv
-            experiments/pipeline_runs/seed43_independent/frames.jsonl
-            experiments/pipeline_runs/seed43_independent/adapted/**/evaluation_results.json
           if-no-files-found: error
