@@ -27,7 +27,7 @@ jobs:
 
           allowed = {
               ".py", ".m", ".md", ".yaml", ".yml", ".json",
-              ".txt", ".csv", ".sh", ".toml", ".gitignore"
+              ".txt", ".csv", ".sh", ".toml", ".pt", ".gitignore"
           }
           tracked = subprocess.check_output(
               ["git", "ls-files", "-z"]
