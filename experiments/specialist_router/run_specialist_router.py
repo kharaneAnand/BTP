@@ -48,7 +48,6 @@ def features(model, packed: torch.Tensor, estimate: torch.Tensor) -> np.ndarray:
     entropy_r = -(row_p * row_p.clamp_min(1e-12).log()).sum(dim=-1)
     entropy_c = -(col_p * col_p.clamp_min(1e-12).log()).sum(dim=-1)
     values = torch.stack((
-        noise.log().squeeze(-1) if noise.ndim > 1 else noise.log(),
         h.abs().square().mean(dim=(-2,-1)).log(),
         row_energy.std(dim=-1) / row_energy.mean(dim=-1).clamp_min(1e-12),
         col_energy.std(dim=-1) / col_energy.mean(dim=-1).clamp_min(1e-12),
@@ -216,6 +215,7 @@ def main():
         "specialist_training": specialist_history,
         "routing_features": ["pilot_channel_matrix_statistics", "received-observation energy",
                              "candidate-output confidence", "candidate residual consistency"],
+        "router_uses_snr_or_velocity_labels": False,
         "velocity_labels_used_at_inference": False,
         "test_labels_used_for_router_fit_or_actions": False,
         "router": "validation-calibrated per-receiver ridge BER prediction; select lowest predicted BER",
