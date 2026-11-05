@@ -157,6 +157,7 @@ def main() -> None:
                 "snr_db": int(metadata_row["snr_db"]),
                 "velocity_kmh": int(metadata_row["velocity_kmh"]),
                 "active_model_before": decision.active_before,
+                "receiver_used_for_frame": decision.active_before,
                 "active_confidence_margin": decision.active_margin,
                 "active_confidence_z": decision.active_confidence_z,
                 "environment_distance": decision.environment_distance,
@@ -210,15 +211,17 @@ def main() -> None:
     ][["sample_index", "receiver", "ber"]].rename(
         columns={"receiver": "best_ber_receiver", "ber": "best_ber"}
     )
-    selected = decisions[["sample_index", "active_model_after"]].merge(
+    # The decision made after a frame changes the model for the next frame.
+    # Score the receiver that actually produced the current frame's estimate.
+    selected = decisions[["sample_index", "receiver_used_for_frame"]].merge(
         label_frame,
-        left_on=["sample_index", "active_model_after"],
+        left_on=["sample_index", "receiver_used_for_frame"],
         right_on=["sample_index", "receiver"],
         how="left",
         validate="one_to_one",
     ).merge(best_by_frame, on="sample_index", how="left", validate="one_to_one")
     selected["selected_is_best_ber"] = (
-        selected["active_model_after"] == selected["best_ber_receiver"]
+        selected["receiver_used_for_frame"] == selected["best_ber_receiver"]
     )
 
     decisions["active_ber"] = selected["ber"].to_numpy()
@@ -247,6 +250,7 @@ def main() -> None:
             "source_note": absolute_gate["source_note"],
         },
         "live_decision_inputs": ["active receiver confidence margin", "candidate margins only after two low frames", "active model state"],
+        "metric_alignment": "receiver_used_for_frame / active_model_before; active_model_after applies to the next frame",
         "environment_distance_logged_but_not_used": True,
         "retraining_performed": False,
         "receiver_inference_counts": runner.receiver_inference_counts,
