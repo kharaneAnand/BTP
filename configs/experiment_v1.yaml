@@ -1,0 +1,389 @@
+# ============================================================
+# BTP EXPERIMENT V1 CONFIGURATION
+# ============================================================
+#
+# Purpose:
+# Central configuration for the OTFS research pipeline.
+#
+# This file is the single source of truth for experiment-level
+# parameters. Python scripts should load these values instead
+# of defining their own copies.
+#
+# Dataset contract:
+#   rx_dd : (16, 32)
+#   tx_dd : (368,)
+#   h_dd  : (432, 368)
+#
+# ============================================================
+
+
+
+# Project
+
+project:
+  name: "BTP"
+  experiment: "otfs_v1"
+  dataset_version: "v1"
+
+
+
+# Dataset
+
+
+dataset:
+
+  root: "datasets/otfs"
+
+  raw_dir: "raw"
+
+  metadata_dir: "metadata"
+
+  processed_dir: "processed"
+
+  split_metadata_file: "dataset_v1_split.csv"
+
+  expected_samples: 900
+
+  frames_per_condition: 100
+
+
+
+# OTFS Grid
+
+
+otfs:
+
+  # Number of delay bins.
+  M: 32
+
+  # Number of Doppler bins.
+  N: 16
+
+  # Carrier frequency in GHz.
+  carrier_frequency_ghz: 4.0
+
+  # Subcarrier spacing in kHz.
+  subcarrier_spacing_khz: 15.0
+
+
+
+# Modulation
+
+
+modulation:
+
+  scheme: "QPSK"
+
+  # Data symbols are generated with unit average power.
+  unit_power: true
+
+
+
+# Channel
+
+
+channel:
+
+  # SNR operating points used for V1.
+  snr_db:
+    - 10
+    - 15
+    - 20
+
+  # User-equipment/channel velocities.
+  velocity_kmh:
+    - 30
+    - 120
+    - 500
+
+  # Number of multipath components.
+  num_paths: 4
+
+  # Maximum delay index.
+  max_delay: 4
+
+  # Force fractional Doppler generation.
+  force_fractional_doppler: true
+
+
+
+# Pilot / Guard Configuration
+
+
+pilot:
+
+  pilot_snr_db: 25
+
+  # Pilot length in delay dimension.
+  pilot_delay_length: 1
+
+  # Pilot length in Doppler dimension.
+  pilot_doppler_length: 1
+
+
+
+# Dataset Split
+
+
+split:
+
+  train_ratio: 0.70
+
+  validation_ratio: 0.15
+
+  test_ratio: 0.15
+
+  random_seed: 42
+
+
+
+# Reproducibility
+
+
+reproducibility:
+
+  seed: 42
+
+
+
+# Dataset Representation
+
+
+representation:
+
+  input: "rx_dd"
+
+  target: "tx_dd"
+
+  channel_ground_truth: "h_dd"
+
+  expected_grid_shape:
+    rows: 16
+    cols: 32
+
+  expected_data_symbols: 368
+
+  expected_channel_shape:
+    rows: 432
+    cols: 368
+
+  expected_num_paths: 4
+
+
+  # Baseline Experiment
+
+baseline:
+
+  # Data SNR used during channel-estimation evaluation.
+  data_snr_db: 10
+
+  # Pilot SNR sweep.
+  pilot_snr_db:
+    - 25
+    - 30
+    - 35
+    - 40
+    - 45
+    - 50
+
+  # Monte Carlo frames per velocity / pilot-SNR condition.
+  num_frames: 100
+
+  # Output directory relative to the project root.
+  output_dir: "experiments/baseline"
+
+  # Result files.
+  results_file: "whole_joint_baseline_results.csv"
+  plot_file: "whole_joint_baseline.png"
+
+
+
+
+# DNN MODEL
+
+
+dnn:
+
+  # Fully connected hidden-layer dimensions.
+  hidden_dims:
+    - 512
+    - 256
+    - 128
+
+  # Dropout probability used between hidden layers.
+  dropout: 0.20
+
+  # Training configuration.
+  training:
+
+    # Maximum number of training epochs.
+    epochs: 100
+
+    # Samples processed per optimizer step.
+    batch_size: 32
+
+    # Initial learning rate.
+    learning_rate: 0.001
+
+    # L2 regularization strength.
+    weight_decay: 0.0001
+
+    # Maximum gradient norm.
+    gradient_clip_norm: 1.0
+
+    # Number of epochs without validation improvement
+    # before training stops.
+    early_stopping_patience: 10
+
+    # Minimum validation improvement required to reset
+    # early stopping.
+    early_stopping_min_delta: 0.000001
+
+    # Learning-rate reduction factor.
+    scheduler_factor: 0.5
+
+    # Epochs without validation improvement before reducing
+    # the learning rate.
+    scheduler_patience: 4
+
+
+  # Checkpoint/output configuration.
+  output:
+
+    # Directory relative to the project root.
+    directory: "experiments/dnn"
+
+    # Best validation checkpoint.
+    checkpoint_file: "best_model.pt"
+
+    # Training history.
+    history_file: "training_history.csv"
+
+    
+  # Evaluation output configuration.
+  evaluation:
+
+    # Aggregate evaluation results.
+    output_file: "evaluation_results.json"
+
+    # Per-test-sample evaluation results.
+    per_sample_file: "per_sample_results.csv"
+
+
+# MMSE RESIDUAL MODEL
+
+
+residual:
+
+  hidden_dims:
+    - 256
+    - 128
+
+  dropout: 0.10
+
+  training:
+    epochs: 100
+    batch_size: 32
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    gradient_clip_norm: 1.0
+    early_stopping_patience: 10
+    early_stopping_min_delta: 0.000001
+    scheduler_factor: 0.5
+    scheduler_patience: 4
+
+  output:
+    directory: "experiments/dnn_residual"
+    checkpoint_file: "best_model.pt"
+    history_file: "training_history.csv"
+    evaluation_file: "evaluation_results.json"
+    per_sample_file: "per_sample_results.csv"
+
+
+# INFORMED MMSE RESIDUAL MODEL
+
+
+informed_residual:
+
+  hidden_dims:
+    - 256
+    - 128
+
+  dropout: 0.10
+
+  training:
+    epochs: 100
+    batch_size: 32
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    gradient_clip_norm: 1.0
+    early_stopping_patience: 10
+    early_stopping_min_delta: 0.000001
+    scheduler_factor: 0.5
+    scheduler_patience: 4
+
+  output:
+    directory: "experiments/dnn_informed_residual"
+    checkpoint_file: "best_model.pt"
+    history_file: "training_history.csv"
+    evaluation_file: "evaluation_results.json"
+    per_sample_file: "per_sample_results.csv"
+
+
+# OAMP-DL MODEL
+
+
+oamp_dl:
+
+  iterations: 20
+
+  training:
+    epochs: 100
+    batch_size: 8
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    gradient_clip_norm: 1.0
+    early_stopping_patience: 10
+    early_stopping_min_delta: 0.000001
+    scheduler_factor: 0.5
+    scheduler_patience: 4
+
+  output:
+    directory: "experiments/oamp_dl"
+    checkpoint_file: "best_model.pt"
+    history_file: "training_history.csv"
+    evaluation_file: "evaluation_results.json"
+    per_sample_file: "per_sample_results.csv"
+
+
+# GNN MODEL
+
+
+gnn:
+
+  # Fixed before training. This is the 1% of the maximum H_hat
+  # magnitude graph-connectivity threshold, not a result-tuned value.
+  edge_threshold_fraction_of_max: 0.01
+
+  message_passing_layers: 4
+  hidden_features: 32
+
+  training:
+    epochs: 100
+    batch_size: 2
+    learning_rate: 0.001
+    weight_decay: 0.0001
+    gradient_clip_norm: 1.0
+    early_stopping_patience: 10
+    early_stopping_min_delta: 0.000001
+    scheduler_factor: 0.5
+    scheduler_patience: 4
+
+  output:
+    mmse_directory: "experiments/gnn_mmse_init"
+    neutral_directory: "experiments/gnn_neutral_init"
+    checkpoint_file: "best_model.pt"
+    history_file: "training_history.csv"
+    evaluation_file: "evaluation_results.json"
+    per_sample_file: "per_sample_results.csv"
+    per_condition_file: "per_condition_results.csv"

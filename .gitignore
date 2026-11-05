@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+_data/
+
+
+# Generated datasets
+datasets/otfs/raw
