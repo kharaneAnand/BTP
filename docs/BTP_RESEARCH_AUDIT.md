@@ -109,6 +109,31 @@ The sequential policy observes a frame using `active_model_before`, then makes a
 - Replaced the controller's test-derived BER gate with BER computed from the saved validation split (135 frames per receiver).
 - Corrected the legacy controller evaluator to score the receiver that actually processed each frame, not the post-decision receiver intended for the next frame.
 
+## 6. Corrected V1 test-stream replay
+
+The saved 135-frame V1 test stream was replayed with the corrected validation-only BER gate. The replay verified that the saved per-frame confidence inputs remain aligned with the controller's active receiver state.
+
+| Decision | Count |
+|---|---:|
+| KEEP | 132 |
+| SWITCH | 1 |
+| ADAPT | 2 |
+
+The single switch selected the original GNN. Both adaptation recommendations were restricted to OAMP-DL. The receiver used for a frame is the pre-decision active receiver; a switch applies to the next frame.
+
+| Metric | Controller pipeline | Always learned detector | Paired difference |
+|---|---:|---:|---:|
+| BER | 0.035376 | 0.032961 | +0.002415 |
+| SER | 0.068076 | 0.063446 | +0.004630 |
+| NMSE | 0.109195 | 0.101745 | +0.007449 |
+
+Condition-stratified paired bootstrap 95% intervals for controller-minus-static differences:
+- BER: [0.001409, 0.003462]
+- SER: [0.002697, 0.006683]
+- NMSE: [0.004696, 0.010251]
+
+All three intervals are strictly positive, so this corrected V1 replay shows the controller pipeline is worse than always using the current best frozen detector on this test stream. The switch/adapt counts are useful behavior diagnostics, not evidence of a performance improvement. Because the raw V1 NPZ frames are not checked into the repository, this is a deterministic replay of saved confidence and per-frame receiver metrics, not a fresh re-inference of V1.
+
 ## 5. Validation status
 
 - The CPU GitHub Actions runner executed the unit suite successfully: **23 tests passed** (including controller transition, unsupported-adapter, current-frame metric-alignment, and stratified-bootstrap regression tests).
