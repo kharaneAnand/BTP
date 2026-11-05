@@ -33,3 +33,14 @@ This method has not yet produced verified four-seed results. It must not be incl
 ## Recommended IEEE submission gate
 
 Before submission: (a) complete online-adaptation runs on fresh seeds; (b) include static, specialist-router, and online-adapted baselines on identical paired test frames; (c) include ablations for no adaptation, no rollback, no constellation prior, and threshold choice; (d) report runtime/complexity and update overhead; (e) use a pilot-based noise estimator; (f) add a broader literature review and avoid an unverified novelty claim; (g) have a co-author independently reproduce the final table and figures.
+
+
+## Related-work and novelty boundary (literature check, 6 November 2026)
+
+The broad idea of adapting learned OTFS receivers to updated channel profiles is not new. Park et al., *Auto-Encoder Based OTFS Modulation and Detection With Meta-Learning*, IEEE Access, 2023, DOI: 10.1109/ACCESS.2023.3271993, explicitly develop meta-learning for an OTFS autoencoder transceiver under newly updated channel profiles.
+
+Model-driven unfolded OTFS detectors are also established. Examples include *Gaussian AMP Aided Model-Driven Learning for OTFS System*, IEEE Communications Letters, 2022, DOI: 10.1109/LCOMM.2022.3206414, and *Model-Driven Deep Learning Assisted Detector for OTFS With Channel Estimation Error*, IEEE Communications Letters, 2024, DOI: 10.1109/LCOMM.2024.3362970.
+
+Self-supervised online adaptation of neural channel estimators has also been studied in OFDM (e.g., ChannelMAE: Self-Supervised Learning Assisted Online Adaptation of Neural Channel Estimators). This is adjacent rather than identical to OTFS detection, but it rules out claiming self-supervised online adaptation as a new concept by itself.
+
+Therefore, do not claim that OTFS adaptation, model-driven OAMP learning, meta-learning, or self-supervised online adaptation is individually novel. A defensible potential contribution—subject to a complete literature review and validated experiments—would be the specific combination of (i) a reliability-calibrated bank of mobility-specialized unfolded receivers, (ii) causal decision-directed self-supervised updates with an independent observation guard and rollback, and (iii) paired evaluation under controlled OTFS distribution shifts. The paper must demonstrate that this combination improves over the strongest static specialist/router baselines at acceptable runtime and update cost.
