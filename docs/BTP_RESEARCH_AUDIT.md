@@ -111,7 +111,8 @@ The sequential policy observes a frame using `active_model_before`, then makes a
 
 ## 5. Validation status
 
-- The CPU GitHub Actions runner executed the unit suite successfully: **20 tests passed** (including controller transition, unsupported-adapter, and current-frame metric-alignment regression tests).
+- The CPU GitHub Actions runner executed the unit suite successfully: **23 tests passed** (including controller transition, unsupported-adapter, current-frame metric-alignment, and stratified-bootstrap regression tests).
+- `run_pipeline.py` now writes `per_frame_receiver_metrics.csv` and adds paired, condition-stratified percentile-bootstrap 95% confidence intervals for adaptive-minus-always-OAMP BER/SER/NMSE to `summary.json`.
 - The first attempt to rerun the original V1 test split stopped before inference because the repository checkout does not contain the raw `datasets/otfs/raw/` frame files. The historical V1 metrics and validation feature CSVs remain available, but the original raw frames are not versioned in this repository.
 - To avoid fabricating or reconstructing V1, the end-to-end workflow now generates new isolated OTFS datasets with seeds 43 and 44 and evaluates the frozen receiver bank/controller on each generated test split. The generated data stays inside each run directory and is not committed to Git.
 - The GitHub-hosted runner is CPU-only. The saved receiver checkpoints are reused for evaluation; no new full-scale model training is claimed by the current workflow. New training will be attempted only if a compute budget is realistic and the resulting run can be validated against held-out data.
