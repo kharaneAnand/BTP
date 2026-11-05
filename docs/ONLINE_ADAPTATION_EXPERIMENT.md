@@ -33,7 +33,7 @@ Report static versus online-adapted OAMP-DL BER, SER and NMSE, paired condition-
 
 ## Implementation audit notes
 
-- Trigger threshold is calibrated once from validation-only eight-frame window-mean normalized-innovation scores (90th percentile); it is frozen before test-stream evaluation.
+- Trigger threshold is calibrated once from validation-only complete eight-frame window-mean normalized-innovation scores (90th percentile); it is frozen before test-stream evaluation.
 - The held-out stream order is randomized deterministically using the experiment seed.
 - The receiver-input loader reads only received DD observations and pilot-derived channel estimates. It does not access transmitted symbols during adaptation or inference.
 - The current implementation still uses simulator-configured SNR to construct the noise-power input. This is a known simulator-information dependency, not a deployable noise estimator.
