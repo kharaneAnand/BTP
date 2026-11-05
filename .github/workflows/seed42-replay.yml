@@ -1,0 +1,47 @@
+name: Seed-42 controller replay
+
+on:
+  push:
+    branches:
+      - "research/**"
+    paths:
+      - "evaluations/supervisor/replay_saved_seed42.py"
+      - "configs/reliability_controller_v1.json"
+      - "experiments/reliability_detector/references.json"
+      - "experiments/reliability_controller/decision_log.csv"
+      - "experiments/oamp_dl/per_sample_results.csv"
+      - "experiments/gnn_mmse_init/per_sample_results.csv"
+      - "gpu_results/pi_egnn/per_sample_results.csv"
+      - ".github/workflows/seed42-replay.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  replay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out BTP
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pandas PyYAML scipy matplotlib textremo-toolbox
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Replay saved V1 stream
+        env:
+          PYTHONPATH: .
+        run: python evaluations/supervisor/replay_saved_seed42.py
+      - name: Upload replay results
+        uses: actions/upload-artifact@v4
+        with:
+          name: seed42-validation-gate-replay
+          path: |
+            experiments/reliability_controller/validation_gate_replay.json
+            experiments/reliability_controller/validation_gate_replay.csv
+          if-no-files-found: error

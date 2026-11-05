@@ -1,0 +1,94 @@
+name: Research validation
+
+on:
+  push:
+    branches:
+      - "research/**"
+    paths:
+      - "run_pipeline.py"
+      - "models/**"
+      - "evaluations/**"
+      - "tests/**"
+      - "training/**"
+      - "src/**"
+      - "configs/**"
+      - "Phy_Mod_OTFS/**"
+      - ".github/workflows/research-validation.yml"
+
+concurrency:
+  group: research-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out BTP
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install numerical dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pandas PyYAML scipy matplotlib textremo-toolbox
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Run unit tests
+        env:
+          PYTHONPATH: .
+        run: python -m unittest discover -s tests -v
+
+  end-to-end-evaluation:
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Check out BTP
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install numerical dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pandas PyYAML scipy matplotlib textremo-toolbox
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Replay saved seed-42 test decisions with validation-only BER gate
+        env:
+          PYTHONPATH: .
+        run: |
+          python evaluations/supervisor/replay_saved_seed42.py
+      - name: Generate independent seed-43 dataset and evaluate
+        env:
+          PYTHONPATH: .
+        run: |
+          python run_pipeline.py --generate-dataset --seed 43 --split test --device cpu --output-dir experiments/pipeline_runs/seed43_independent
+      - name: Generate independent seed-44 dataset and evaluate
+        env:
+          PYTHONPATH: .
+        run: |
+          python run_pipeline.py --generate-dataset --seed 44 --split test --device cpu --output-dir experiments/pipeline_runs/seed44_independent
+      - name: Upload controller and adaptation results
+        uses: actions/upload-artifact@v4
+        with:
+          name: btp-controller-evaluation
+          path: |
+            experiments/reliability_controller/validation_gate_replay.json
+            experiments/reliability_controller/validation_gate_replay.csv
+            experiments/pipeline_runs/seed43_independent/summary.json
+            experiments/pipeline_runs/seed43_independent/decision_log.csv
+            experiments/pipeline_runs/seed43_independent/frames.jsonl
+            experiments/pipeline_runs/seed43_independent/per_frame_receiver_metrics.csv
+            experiments/pipeline_runs/seed43_independent/adapted/**/evaluation_results.json
+            experiments/pipeline_runs/seed44_independent/summary.json
+            experiments/pipeline_runs/seed44_independent/decision_log.csv
+            experiments/pipeline_runs/seed44_independent/frames.jsonl
+            experiments/pipeline_runs/seed44_independent/per_frame_receiver_metrics.csv
+            experiments/pipeline_runs/seed44_independent/adapted/**/evaluation_results.json
+          if-no-files-found: error

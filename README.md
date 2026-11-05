@@ -28,7 +28,7 @@ The configuration describes a 16 x 32 received delay-Doppler grid, a 432 x 368 d
 
 ## Unified Pipeline Application
 
-The root `run_pipeline.py` runs a single frame or a dataset split through the active receiver adapter, environment-distance extraction, reliability-reference scoring, and the current stateful controller. It starts on OAMP-DL unless a prior controller state is provided. The controller's existing lazy candidate inference, confidence thresholds, cooldown, and frozen BER gate are unchanged. Environment distance is reported but does not affect the controller action.
+The root `run_pipeline.py` runs a single frame or a dataset split through the active receiver adapter, environment-distance extraction, reliability-reference scoring, and the current stateful controller. It starts on OAMP-DL unless a prior controller state is provided. The controller's existing lazy candidate inference, confidence thresholds, cooldown, and frozen BER gate are unchanged. Environment distance is reported but does not affect the controller action. The fixed receiver BER non-inferiority gate is calibrated from saved validation-split metrics only; the held-out test labels are reserved for final policy evaluation.
 
 Run one existing frame (the SNR and velocity are required because they are not stored inside the NPZ):
 

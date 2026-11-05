@@ -1,0 +1,53 @@
+name: BTP source bundle
+
+on:
+  push:
+    branches:
+      - "research/**"
+
+concurrency:
+  group: source-bundle-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out BTP
+        uses: actions/checkout@v4
+      - name: Create source archive without generated binary data
+        run: |
+          python - <<'PY'
+          import pathlib
+          import subprocess
+          import zipfile
+
+          allowed = {
+              ".py", ".m", ".md", ".yaml", ".yml", ".json",
+              ".txt", ".csv", ".sh", ".toml", ".pt", ".gitignore"
+          }
+          tracked = subprocess.check_output(
+              ["git", "ls-files", "-z"]
+          ).decode().split("\0")
+          with zipfile.ZipFile(
+              "btp-source.zip",
+              "w",
+              compression=zipfile.ZIP_DEFLATED,
+              compresslevel=6,
+          ) as archive:
+              for name in tracked:
+                  if not name:
+                      continue
+                  path = pathlib.PurePosixPath(name)
+                  if path.suffix.lower() in allowed or path.name == ".gitignore":
+                      archive.write(name, name)
+          PY
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: btp-source-zip
+          path: btp-source.zip
+          if-no-files-found: error
