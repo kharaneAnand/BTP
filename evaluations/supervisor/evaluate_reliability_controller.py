@@ -60,6 +60,30 @@ def load_test_metrics(project_root: Path, config) -> dict[str, dict[int, dict[st
     return labels
 
 
+def select_current_frame_results(
+    decisions: pd.DataFrame,
+    label_frame: pd.DataFrame,
+    best_by_frame: pd.DataFrame,
+) -> pd.DataFrame:
+    """Join metrics for the receiver that processed each frame, before its decision."""
+    receiver_column = (
+        "receiver_used_for_frame"
+        if "receiver_used_for_frame" in decisions.columns
+        else "active_model_before"
+    )
+    selected = decisions[["sample_index", receiver_column]].merge(
+        label_frame,
+        left_on=["sample_index", receiver_column],
+        right_on=["sample_index", "receiver"],
+        how="left",
+        validate="one_to_one",
+    ).merge(best_by_frame, on="sample_index", how="left", validate="one_to_one")
+    selected["selected_is_best_ber"] = (
+        selected[receiver_column] == selected["best_ber_receiver"]
+    )
+    return selected
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=Path, required=True)
@@ -211,18 +235,8 @@ def main() -> None:
     ][["sample_index", "receiver", "ber"]].rename(
         columns={"receiver": "best_ber_receiver", "ber": "best_ber"}
     )
-    # The decision made after a frame changes the model for the next frame.
-    # Score the receiver that actually produced the current frame's estimate.
-    selected = decisions[["sample_index", "receiver_used_for_frame"]].merge(
-        label_frame,
-        left_on=["sample_index", "receiver_used_for_frame"],
-        right_on=["sample_index", "receiver"],
-        how="left",
-        validate="one_to_one",
-    ).merge(best_by_frame, on="sample_index", how="left", validate="one_to_one")
-    selected["selected_is_best_ber"] = (
-        selected["receiver_used_for_frame"] == selected["best_ber_receiver"]
-    )
+    # A decision after frame t changes the receiver for frame t+1.
+    selected = select_current_frame_results(decisions, label_frame, best_by_frame)
 
     decisions["active_ber"] = selected["ber"].to_numpy()
     decisions["active_ser"] = selected["ser"].to_numpy()
