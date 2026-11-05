@@ -193,13 +193,22 @@ def main():
     val_scores.to_csv(out/"validation_receiver_metrics.csv", index=False)
     test_scores.to_csv(out/"test_receiver_metrics.csv", index=False)
     chosen, predicted, calibration = fit_ridge_router(val_scores, test_scores)
-    actual = test_scores.pivot(index="sample_index", columns="receiver", values="ber").sort_index()
-    static = actual["oamp_dl_generalist"].to_numpy()
-    routed = np.array([actual.iloc[i][chosen[i]] for i in range(len(chosen))])
-    oracle = actual.min(axis=1).to_numpy()
+    actual_metrics = {
+        metric: test_scores.pivot(index="sample_index", columns="receiver", values=metric).sort_index()
+        for metric in ("ber", "ser", "nmse")
+    }
     meta = test_meta.reset_index(drop=True)
-    delta = routed-static
-    ci = paired_bootstrap(delta, meta)
+    routed_values, static_values, oracle_values, paired = {}, {}, {}, {}
+    for metric, table in actual_metrics.items():
+        static_values[metric] = table["oamp_dl_generalist"].to_numpy()
+        routed_values[metric] = np.array([table.iloc[i][chosen[i]] for i in range(len(chosen))])
+        oracle_values[metric] = table.min(axis=1).to_numpy()
+        difference = routed_values[metric] - static_values[metric]
+        paired[metric] = {"mean": float(difference.mean()),
+                          "ci95": paired_bootstrap(difference, meta, seed=2026 + args.seed)}
+    static = static_values["ber"]
+    routed = routed_values["ber"]
+    oracle = oracle_values["ber"]
     decision_counts = {"KEEP": int(np.sum(chosen=="oamp_dl_generalist")),
                        "SWITCH": int(np.sum(chosen!="oamp_dl_generalist")),
                        "ADAPT": 0}
@@ -220,13 +229,13 @@ def main():
         "test_labels_used_for_router_fit_or_actions": False,
         "router": "validation-calibrated per-receiver ridge BER prediction; select lowest predicted BER",
         "decision_counts": decision_counts,
-        "routed": {"ber": float(routed.mean())},
-        "always_oamp_dl": {"ber": float(static.mean())},
-        "oracle_upper_bound_not_deployable": {"ber": float(oracle.mean())},
-        "routed_minus_static_ber": {"mean": float(delta.mean()), "ci95": ci},
+        "routed": {k: float(v.mean()) for k,v in routed_values.items()},
+        "always_oamp_dl": {k: float(v.mean()) for k,v in static_values.items()},
+        "oracle_upper_bound_not_deployable": {k: float(v.mean()) for k,v in oracle_values.items()},
+        "routed_minus_static_paired": paired,
         "frames_where_non_generalist_wins_oracle": int(np.sum(oracle < static)),
         "oracle_frame_fraction": float(np.mean(oracle < static)),
-        "test_receiver_ber": {k: float(v.mean()) for k,v in actual.items()},
+        "test_receiver_ber": {k: float(v.mean()) for k,v in actual_metrics["ber"].items()},
         "caveat": "Oracle uses test labels and is an unattainable upper bound. Router is evaluated only on held-out test labels after fitting on validation."
     }
     (out/"summary.json").write_text(json.dumps(summary, indent=2))
