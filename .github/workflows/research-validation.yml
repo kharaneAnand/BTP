@@ -1,10 +1,9 @@
 name: Research validation
 
 on:
-  pull_request:
+  push:
     branches:
-      - main
-  workflow_dispatch:
+      - "research/**"
 
 permissions:
   contents: read
