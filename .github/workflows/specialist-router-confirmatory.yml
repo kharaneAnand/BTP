@@ -1,0 +1,53 @@
+name: Specialist router confirmatory replications
+
+on:
+  push:
+    branches:
+      - "research/specialist-router-final"
+    paths:
+      - ".github/workflows/specialist-router-confirmatory.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  confirmatory-routing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [47, 48]
+    steps:
+      - name: Checkout BTP research branch
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install numerical dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pandas PyYAML scipy matplotlib textremo-toolbox
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Run frozen specialist bank and validation-only router
+        env:
+          PYTHONPATH: .
+          OMP_NUM_THREADS: "2"
+          MKL_NUM_THREADS: "2"
+        run: |
+          python experiments/specialist_router/run_specialist_router.py \
+            --seed ${{ matrix.seed }} \
+            --device cpu \
+            --output-dir experiments/specialist_router/results/seed${{ matrix.seed }}
+      - name: Upload confirmatory results
+        uses: actions/upload-artifact@v4
+        with:
+          name: specialist-router-seed-${{ matrix.seed }}
+          path: |
+            experiments/specialist_router/results/seed${{ matrix.seed }}/summary.json
+            experiments/specialist_router/results/seed${{ matrix.seed }}/decision_log.csv
+            experiments/specialist_router/results/seed${{ matrix.seed }}/validation_receiver_metrics.csv
+            experiments/specialist_router/results/seed${{ matrix.seed }}/test_receiver_metrics.csv
+            experiments/specialist_router/results/seed${{ matrix.seed }}/checkpoints/*.pt
+          if-no-files-found: error
