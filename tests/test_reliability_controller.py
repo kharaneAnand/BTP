@@ -55,7 +55,7 @@ class ReliabilityControllerTests(unittest.TestCase):
         self.assertEqual(result.decision, "KEEP")
         self.assertEqual(calls, [])
 
-    def test_adapt_recommends_best_alternative_not_active_model(self) -> None:
+    def test_adapt_recommends_only_a_model_with_a_supported_adapter(self) -> None:
         result = self.controller.step(
             0.45,
             0.4,
@@ -78,7 +78,7 @@ class ReliabilityControllerTests(unittest.TestCase):
             },
         )
         self.assertEqual(result.decision, "ADAPT")
-        self.assertEqual(result.recommended_adaptation_model, "original_gnn")
+        self.assertEqual(result.recommended_adaptation_model, "oamp_dl")
 
     def test_candidate_comparison_uses_each_receivers_own_z_scale(self) -> None:
         references = {
@@ -130,6 +130,21 @@ class ReliabilityControllerTests(unittest.TestCase):
         self.assertFalse(
             result.candidate_gate_results["pi_egnn"]["passes_best_receiver_ber_floor"]
         )
+
+    def test_no_unsupported_adaptation_is_recommended(self) -> None:
+        controller = ReliabilityController(
+            self.references,
+            supported_adaptation_models=(),
+        )
+        candidates = {
+            "mmse": 0.46,
+            "original_gnn": 0.47,
+            "pi_egnn": 0.455,
+        }
+        controller.step(0.45, 0.0, lambda: candidates)
+        result = controller.step(0.45, 0.0, lambda: candidates)
+        self.assertEqual(result.decision, "KEEP")
+        self.assertIsNone(result.recommended_adaptation_model)
 
 
 if __name__ == "__main__":
