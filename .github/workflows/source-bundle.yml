@@ -27,7 +27,7 @@ jobs:
           }
           tracked = subprocess.check_output(
               ["git", "ls-files", "-z"]
-          ).decode().split("\\0")
+          ).decode().split("\0")
           with zipfile.ZipFile(
               "btp-source.zip",
               "w",
