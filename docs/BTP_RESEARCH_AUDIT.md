@@ -111,12 +111,15 @@ The sequential policy observes a frame using `active_model_before`, then makes a
 
 ## 5. Validation status
 
-The changes above were committed to the working Git branch through the GitHub API. The repository connector provides source-control access but not a local Python runtime for this repository, so the tests have **not yet been executed** in this environment. They must be run in a local/Colab environment before merging or claiming the branch is fully validated.
+- The CPU GitHub Actions runner executed the unit suite successfully: **20 tests passed** (including controller transition, unsupported-adapter, and current-frame metric-alignment regression tests).
+- The first attempt to rerun the original V1 test split stopped before inference because the repository checkout does not contain the raw `datasets/otfs/raw/` frame files. The historical V1 metrics and validation feature CSVs remain available, but the original raw frames are not versioned in this repository.
+- To avoid fabricating or reconstructing V1, the end-to-end workflow now generates new isolated OTFS datasets with seeds 43 and 44 and evaluates the frozen receiver bank/controller on each generated test split. The generated data stays inside each run directory and is not committed to Git.
+- The GitHub-hosted runner is CPU-only. The saved receiver checkpoints are reused for evaluation; no new full-scale model training is claimed by the current workflow. New training will be attempted only if a compute budget is realistic and the resulting run can be validated against held-out data.
 
-Recommended first validation command:
+The reproducibility command for the unit suite is:
 
 ```bash
 python -m unittest discover -s tests -v
 ```
 
-Then run the saved-artifact paired evaluation and only afterward launch new training jobs. Keep `main` and the original `OTFS-NeuroRx` repository unchanged until the branch passes validation.
+The end-to-end seed-43/44 workflow is the next validation stage. Keep `main` and the original `OTFS-NeuroRx` repository unchanged until all generated-data evaluations and result audits are complete.
