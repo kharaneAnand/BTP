@@ -329,3 +329,16 @@ Typical model result folders contain `best_model.pt`, `training_history.csv`, `e
 - OAMP-DL is the measured performance leader, but model-default state transfer, reliability-based switching, and efficient adaptation/retraining remain future work.
 #   B T P  
  
+
+## Research status (6 November 2026)
+
+- **Main branch includes the validated specialist-router experiment** (three mobility-regime OAMP-DL specialists plus a validation-calibrated ridge router), evaluated on four independent seeds 45--48 (540 held-out test frames).
+- The pooled router improves BER and SER modestly relative to static OAMP-DL; the paired condition-stratified 95% intervals exclude zero for BER and SER, but not NMSE. Seed-level outcomes are heterogeneous; do not claim a universal improvement.
+- The specialist router emits KEEP/SWITCH only (126/414 across the four test seeds); ADAPT=0 is intentional because the earlier few-shot script is post-stream supervised calibration, not causal online adaptation.
+- A separate draft PR (#3) explores causal, decision-directed self-supervised online adaptation. It is not merged and has no verified performance results yet. Do not cite it as a successful method until its independent runs and safeguards have been validated.
+- The detector still receives simulator-derived noise power based on configured SNR. A deployment-ready implementation must estimate noise from pilots/observations.
+- The learned OAMP-DL implementation is a learned iterative matched-filter residual-update detector; it should not be described as a mathematically faithful textbook OAMP/UAMP implementation.
+
+## Reproducibility and paper claims
+
+Use the final 20-page report and the four-seed experiment artifacts for the specialist-router claims. Treat the online-adaptation branch as experimental methodology only until fresh test results are available. Report confidence intervals, seed heterogeneity, the oracle's non-deployable status, and simulator-information limitations. The original `OTFS-NeuroRx` repository is separate and was not modified.
