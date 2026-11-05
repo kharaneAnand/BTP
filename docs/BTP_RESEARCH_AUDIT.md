@@ -109,7 +109,7 @@ The sequential policy observes a frame using `active_model_before`, then makes a
 - Replaced the controller's test-derived BER gate with BER computed from the saved validation split (135 frames per receiver).
 - Corrected the legacy controller evaluator to score the receiver that actually processed each frame, not the post-decision receiver intended for the next frame.
 
-## 6. Corrected V1 test-stream replay
+## 5. Corrected V1 test-stream replay
 
 The saved 135-frame V1 test stream was replayed with the corrected validation-only BER gate. The replay verified that the saved per-frame confidence inputs remain aligned with the controller's active receiver state.
 
@@ -134,7 +134,7 @@ Condition-stratified paired bootstrap 95% intervals for controller-minus-static 
 
 All three intervals are strictly positive, so this corrected V1 replay shows the controller pipeline is worse than always using the current best frozen detector on this test stream. The switch/adapt counts are useful behavior diagnostics, not evidence of a performance improvement. Because the raw V1 NPZ frames are not checked into the repository, this is a deterministic replay of saved confidence and per-frame receiver metrics, not a fresh re-inference of V1.
 
-## 5. Validation status
+## 6. Validation status
 
 - The CPU GitHub Actions runner executed the unit suite successfully: **23 tests passed** (including controller transition, unsupported-adapter, current-frame metric-alignment, and stratified-bootstrap regression tests).
 - `run_pipeline.py` now writes `per_frame_receiver_metrics.csv` and adds paired, condition-stratified percentile-bootstrap 95% confidence intervals for adaptive-minus-always-OAMP BER/SER/NMSE to `summary.json`.
