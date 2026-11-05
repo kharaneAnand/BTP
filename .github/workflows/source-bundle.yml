@@ -1,0 +1,24 @@
+name: BTP source bundle
+
+on:
+  push:
+    branches:
+      - "research/**"
+
+permissions:
+  contents: read
+
+jobs:
+  archive:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out BTP
+        uses: actions/checkout@v4
+      - name: Create tracked source archive
+        run: git archive --format=zip --output=btp-source.zip HEAD
+      - name: Upload source archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: btp-source-zip
+          path: btp-source.zip
+          if-no-files-found: error
