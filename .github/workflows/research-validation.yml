@@ -4,6 +4,16 @@ on:
   push:
     branches:
       - "research/**"
+    paths:
+      - "run_pipeline.py"
+      - "models/**"
+      - "evaluations/**"
+      - "tests/**"
+      - "training/**"
+      - "src/**"
+      - "configs/**"
+      - "Phy_Mod_OTFS/**"
+      - ".github/workflows/research-validation.yml"
 
 concurrency:
   group: research-validation-${{ github.ref }}
