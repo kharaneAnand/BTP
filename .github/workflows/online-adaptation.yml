@@ -3,7 +3,7 @@ name: Causal self-supervised OAMP-DL online adaptation
 on:
   push:
     branches:
-      - "research/online-self-supervised-adaptation"
+      - "research/online-self-supervised-adaptation-mainline"
     paths:
       - "experiments/online_adaptation/**"
       - ".github/workflows/online-adaptation.yml"
