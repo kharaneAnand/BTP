@@ -28,3 +28,9 @@ The specialist system is considered to improve only if the routed test BER is lo
 ## Reproducibility and limitations
 
 The workflow runs on CPU, saves specialist checkpoints, validation/test per-receiver metrics, decision logs, and summaries as GitHub Actions artifacts. This is a simulated OTFS study with the existing V1 channel generator and fixed pilot/channel-estimation model. The OAMP-DL detector still receives the configured noise variance from the simulator, rather than an independently estimated noise variance; results should not be generalized to measured radio hardware without a separate experimental campaign.
+
+## Follow-up confirmatory replications
+
+The first clean two-seed evaluation produced a pooled, condition-stratified paired BER difference of -0.00013084 (95% CI [-0.00023148, -0.00004026]) and SER difference of -0.00025161 (95% CI [-0.00044283, -0.00008052]). The pooled NMSE difference was -0.00014338 (95% CI [-0.00033376, 0.00003163]). Seed 45's individual BER interval crossed zero, while seed 46's did not. Therefore, the original strict per-seed success criterion is not fully satisfied, even though the pooled BER/SER comparison is favorable.
+
+To assess reproducibility without tuning on the test sets, the exact same code, checkpoint initialization, learning rate, specialist training epochs, router features, and ridge regularization are frozen and run on two additional independent seeds, 47 and 48. No hyperparameter changes are permitted after inspecting seeds 45/46. These are confirmatory replications, not a new tuned model.
