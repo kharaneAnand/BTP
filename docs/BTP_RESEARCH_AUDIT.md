@@ -134,7 +134,31 @@ Condition-stratified paired bootstrap 95% intervals for controller-minus-static 
 
 All three intervals are strictly positive, so this corrected V1 replay shows the controller pipeline is worse than always using the current best frozen detector on this test stream. The switch/adapt counts are useful behavior diagnostics, not evidence of a performance improvement. Because the raw V1 NPZ frames are not checked into the repository, this is a deterministic replay of saved confidence and per-frame receiver metrics, not a fresh re-inference of V1.
 
-## 6. Validation status
+## 6. Independent generated-data runs
+
+Two fresh 900-frame datasets were generated with seeds 43 and 44. Each evaluation used the frozen receiver checkpoints, the validation-only BER gate, fresh receiver scoring on 135 held-out test frames, and the corrected supported-adapter recommendation.
+
+| Run | KEEP | SWITCH | ADAPT | Switch destination | Adapt recommendation |
+|---|---:|---:|---:|---|---|
+| Seed 43 | 130 | 1 | 4 | Original GNN (1) | OAMP-DL (4) |
+| Seed 44 | 133 | 0 | 2 | None | OAMP-DL (2) |
+
+| Run | Metric | Controller pipeline | Always OAMP-DL |
+|---|---|---:|---:|
+| Seed 43 | BER | 0.039392 | 0.036061 |
+|  | SER | 0.074718 | 0.068357 |
+|  | NMSE | 0.117578 | 0.108790 |
+| Seed 44 | BER | 0.033977 | 0.033977 |
+|  | SER | 0.064251 | 0.064251 |
+|  | NMSE | 0.102413 | 0.102413 |
+
+The seed-43 controller is worse than always OAMP-DL on all three metrics. Seed 44 has no receiver switch, so its selected-receiver stream is identical to always OAMP-DL. The per-frame true-best receiver match rates were 41.48% and 71.85%, respectively.
+
+Few-shot adaptation ran only for OAMP-DL, with 15 validation calibration frames per condition, 60 trainable scalar controls, and 20 fixed optimizer steps. The original checkpoint was preserved, and test labels were not used for training. Adaptation effects were very small; the paired per-condition 95% intervals crossed zero for BER, SER, and NMSE. These runs do not establish a statistically reliable adaptation gain.
+
+Important interpretation: ADAPT is a post-stream recommendation followed by a separate validation-calibrated adaptation evaluation. It is not an online weight update that changes subsequent test-frame predictions. This limitation is explicit in the results and must remain explicit in the paper.
+
+## 7. Validation status
 
 - The CPU GitHub Actions runner executed the unit suite successfully: **23 tests passed** (including controller transition, unsupported-adapter, current-frame metric-alignment, and stratified-bootstrap regression tests).
 - `run_pipeline.py` now writes `per_frame_receiver_metrics.csv` and adds paired, condition-stratified percentile-bootstrap 95% confidence intervals for adaptive-minus-always-OAMP BER/SER/NMSE to `summary.json`.
