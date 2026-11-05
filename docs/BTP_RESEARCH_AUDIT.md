@@ -64,6 +64,12 @@ Validation-derived BER gate:
 
 These values are calculated from saved per-frame validation metrics; they are not newly trained or newly inferred results.
 
+### G. The legacy controller evaluator scored the post-decision receiver on the current frame
+
+The sequential policy observes a frame using `active_model_before`, then makes a decision that changes `active_model_after` for the next frame. The legacy evaluator joined offline metrics against `active_model_after`, which incorrectly credited the newly selected receiver with the frame that had already been processed.
+
+**Correction on this branch:** `evaluations/supervisor/evaluate_reliability_controller.py` now records `receiver_used_for_frame` and joins the current frame's metrics against that receiver. Switch destinations remain reported from `active_model_after`, which is the correct next-frame state. The unified `run_pipeline.py` batch summary already scores `receiver.used_for_this_frame` and was not affected by this specific alignment bug.
+
 ## 3. Experimental roadmap (ordered by expected research value)
 
 1. **Reproducibility and audit tests**
@@ -101,6 +107,7 @@ These values are calculated from saved per-frame validation metrics; they are no
 - Updated `models/supervisor/reliability_controller.py` to avoid unsupported adaptation recommendations and compare supported adaptation choices on standardized confidence scales.
 - Updated `tests/test_reliability_controller.py` to assert the supported-adapter behavior and the no-supported-adapter fallback.
 - Replaced the controller's test-derived BER gate with BER computed from the saved validation split (135 frames per receiver).
+- Corrected the legacy controller evaluator to score the receiver that actually processed each frame, not the post-decision receiver intended for the next frame.
 
 ## 5. Validation status
 
