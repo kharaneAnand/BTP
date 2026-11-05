@@ -28,3 +28,44 @@ jobs:
         env:
           PYTHONPATH: .
         run: python -m unittest discover -s tests -v
+
+  end-to-end-evaluation:
+    needs: unit-tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - name: Check out BTP
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install numerical dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pandas PyYAML scipy matplotlib textremo-toolbox
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Evaluate seed-42 test split with validation-only gate
+        env:
+          PYTHONPATH: .
+        run: |
+          python run_pipeline.py --dataset-root datasets/otfs --split test --calibration-root datasets/otfs --device cpu --output-dir experiments/pipeline_runs/seed42_validation_gate
+      - name: Generate independent seed-43 dataset and evaluate
+        env:
+          PYTHONPATH: .
+        run: |
+          python run_pipeline.py --generate-dataset --seed 43 --split test --device cpu --output-dir experiments/pipeline_runs/seed43_independent
+      - name: Upload controller and adaptation results
+        uses: actions/upload-artifact@v4
+        with:
+          name: btp-controller-evaluation
+          path: |
+            experiments/pipeline_runs/seed42_validation_gate/summary.json
+            experiments/pipeline_runs/seed42_validation_gate/decision_log.csv
+            experiments/pipeline_runs/seed42_validation_gate/frames.jsonl
+            experiments/pipeline_runs/seed42_validation_gate/adapted/**/evaluation_results.json
+            experiments/pipeline_runs/seed43_independent/summary.json
+            experiments/pipeline_runs/seed43_independent/decision_log.csv
+            experiments/pipeline_runs/seed43_independent/frames.jsonl
+            experiments/pipeline_runs/seed43_independent/adapted/**/evaluation_results.json
+          if-no-files-found: error
