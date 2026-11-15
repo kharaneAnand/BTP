@@ -173,3 +173,20 @@ python -m unittest discover -s tests -v
 ```
 
 The end-to-end seed-43/44 workflow is the next validation stage. Keep `main` and the original `OTFS-NeuroRx` repository unchanged until all generated-data evaluations and result audits are complete.
+
+
+## 8. New audit: simulator-noise dependency in V1 pilot processing
+
+A source-level review found a second oracle dependency beyond the OAMP-DL noise input. In V1, the dataset generator sets the embedded-pilot amplitude as a function of the simulator's exact noise power and constructs the stored `h_hat` using a threshold of `3 * sqrt(noise_power)`. Thus the receiver's stored pilot-derived channel estimate is also influenced by simulator noise metadata. The current V1 receiver pipeline should not be described as a fully receiver-side noise/CSI estimation chain.
+
+The first attempt to estimate noise from only the nominal pilot-delay column failed. The channel generator deliberately moves the minimum-delay path to zero, so the pilot-delay column can contain a real channel response. The fixed-column estimator overestimated noise by approximately 6.2x on one exploratory seed. That method is rejected.
+
+The corrected candidate examines the five delay columns in the embedded-pilot CE region and selects the minimum-energy column. Under the current four-path, five-delay-bin generator, at least one CE delay column has no path response. Exploratory raw estimates on seeds 55 and 56 had mean estimated/true noise ratios of 0.9487 and 0.9342, respectively; condition-stratified 95% intervals were [0.9096, 0.9889] and [0.8974, 0.9714]. This indicates a modest downward bias and substantial per-frame sampling variance. A multiplicative correction is now fitted using training-split noise labels only. Seeds 55/56 are development diagnostics and must not be counted as confirmatory receiver evidence.
+
+## 9. V2 noise-aware receiver experiment (in progress)
+
+The V2 experiment changes pilot power to a fixed public value (10 linear units), independent of data SNR. It estimates noise from received pilot-CE samples, applies a frozen training-only calibration scalar, and reconstructs `h_hat` from `rx_dd` using the estimated noise and fixed pilot amplitude. The original simulator-derived `h_hat` and true noise are retained separately as non-deployable audit references only.
+
+The V2 receiver experiment fine-tunes oracle-noise and noise-estimated generalists from the same OAMP-DL initialization, then adds velocity and SNR specialists to the noise-estimated generalist. Its shared-feature ridge router uses only received-observation, estimated-channel and estimated-noise features; it does not use SNR/velocity labels or candidate receiver outputs at decision time. Test symbols and true channel are loaded only after all test decisions and inference have completed.
+
+Seed 57 is an exploratory smoke test. Seeds 58--61 are reserved as frozen confirmatory replications. No V2 accuracy improvement is claimed until the smoke test passes, the implementation is frozen, and the confirmatory paired test results satisfy the preregistered acceptance criteria in `docs/NOISE_AWARE_SPECIALIST_EXPERIMENT.md`.

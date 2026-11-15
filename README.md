@@ -342,3 +342,30 @@ Typical model result folders contain `best_model.pt`, `training_history.csv`, `e
 ## Reproducibility and paper claims
 
 Use the final 20-page report and the four-seed experiment artifacts for the specialist-router claims. Treat the online-adaptation branch as experimental methodology only until fresh test results are available. Report confidence intervals, seed heterogeneity, the oracle's non-deployable status, and simulator-information limitations. The original `OTFS-NeuroRx` repository is separate and was not modified.
+
+
+## V2 Noise-Aware Receiver Experiment (research branch / draft)
+
+The V2 experiment is a separate research path intended to remove the V1 simulator-noise dependency from deployable receiver inputs.
+
+- Configuration: `configs/experiment_v2.yaml`
+- Fresh V2 dataset generator: `experiments/dataset_generation/generate_otfs_dataset_v2.py`
+- Pilot-domain noise estimator: `models/supervisor/pilot_noise_estimator.py`
+- Noise-aware receiver bank and shared-feature router: `experiments/noise_estimation/run_noise_aware_specialist_router.py`
+- Preregistered protocol: `docs/NOISE_AWARE_SPECIALIST_EXPERIMENT.md`
+- Multi-seed paired analysis: `evaluations/noise_aware/summarize_noise_aware_runs.py`
+
+The V2 transmitter uses a fixed pilot power of 10 linear units, independent of data SNR. The receiver estimates noise from the minimum-energy column in the five pilot channel-estimation delay columns, applies a multiplicative scale calibrated from training-split noise labels only, and reconstructs the channel matrix from `rx_dd`. The deployable V2 receiver does not consume the simulator's stored `h_hat` or true noise variance. The oracle-noise/`h_hat_oracle` model is an offline upper-bound reference only.
+
+Run an exploratory smoke seed (not confirmatory):
+
+```bash
+python -m unittest discover -s tests -p "test_pilot_noise_estimator.py"
+python experiments/noise_estimation/run_noise_aware_specialist_router.py \
+  --seed 57 --device cpu \
+  --output-dir experiments/noise_estimation/noise_aware_results/seed57
+```
+
+After the implementation and protocol are frozen, the four confirmatory seeds are 58--61. The workflow is `.github/workflows/noise-aware-confirmatory.yml`; it is deliberately gated by `docs/noise-aware-confirmatory-ready.md` so exploratory smoke runs do not accidentally launch the confirmatory matrix. The pooled report is recomputed from the per-frame artifacts by the summarizer above.
+
+**Research status:** the V1 velocity+SNR specialist pilot is a small positive pooled BER result but is not sufficient for a paper-ready claim. V2 smoke and confirmatory results are not to be claimed until their workflows complete and the paired BER/SER/NMSE criteria in the protocol are checked. The V2 noise calibration uses simulator noise labels only for its offline training-split scalar calibration; deployment requires a calibration scale obtained from reference measurements or a known pilot/noise procedure.

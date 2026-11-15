@@ -44,3 +44,34 @@ Model-driven unfolded OTFS detectors are also established. Examples include *Gau
 Self-supervised online adaptation of neural channel estimators has also been studied in OFDM (e.g., ChannelMAE: Self-Supervised Learning Assisted Online Adaptation of Neural Channel Estimators). This is adjacent rather than identical to OTFS detection, but it rules out claiming self-supervised online adaptation as a new concept by itself.
 
 Therefore, do not claim that OTFS adaptation, model-driven OAMP learning, meta-learning, or self-supervised online adaptation is individually novel. A defensible potential contribution—subject to a complete literature review and validated experiments—would be the specific combination of (i) a reliability-calibrated bank of mobility-specialized unfolded receivers, (ii) causal decision-directed self-supervised updates with an independent observation guard and rollback, and (iii) paired evaluation under controlled OTFS distribution shifts. The paper must demonstrate that this combination improves over the strongest static specialist/router baselines at acceptable runtime and update cost.
+
+
+## Updated evidence and claim boundary (15 November 2026)
+
+### SNR-specialist bank pilot (merged PR #5)
+
+The expanded seven-receiver bank (generalist + three velocity specialists + three SNR specialists) was evaluated on two independent 135-frame test sets (seeds 53 and 54). Recomputed from the uploaded per-frame test CSVs:
+
+- Static noise-oracle OAMP-DL: BER 0.03008253, SER 0.05771940, NMSE 0.09312466.
+- Expanded velocity+SNR router: BER 0.02997182, SER 0.05752818, NMSE 0.09316725.
+- Paired condition-stratified BER difference: -0.00011071, 95% CI [-0.00021135, -0.00001510].
+- SER difference: -0.00019122, 95% CI [-0.00038245, approximately 0].
+- NMSE difference: +0.00004258, 95% CI [-0.00010564, +0.00021303].
+
+Seed 53 has a clear BER reduction; seed 54 is nearly unchanged and its BER interval crosses zero. The pooled BER result is statistically supported, but this is only a two-seed pilot and the router includes log noise variance derived from simulator SNR. It is not yet a deployable receiver result.
+
+### Pilot noise-estimator diagnostics
+
+The original fixed pilot-delay-column estimator is rejected: the channel generator moves the minimum-delay path to zero, so that column can contain a real path response. The corrected candidate selects the minimum-energy column among the five pilot CE delay columns. A multiplicative correction is fitted using the training split only.
+
+Exploratory V1 seeds 55/56 show calibrated test estimated/true noise ratios of 1.0345 (95% CI [0.9919, 1.0782]) and 1.0138 (95% CI [0.9739, 1.0542]). Per-frame standard deviation remains about 25--27%, so the estimate is a noisy input rather than a precise per-frame measurement. These seeds informed the estimator correction and are not confirmatory receiver evidence.
+
+### V2 noise-aware receiver experiment (not yet paper evidence)
+
+V2 uses fixed pilot power, estimates noise from received pilot-CE observations, and reconstructs `h_hat` using that estimated noise. It trains oracle-noise and noise-estimated generalists from the same OAMP-DL initialization, then adds velocity and SNR specialists and a shared-feature single-pass router. The router does not use SNR/velocity labels or test BER.
+
+Seed 57 is an exploratory smoke test. Fresh seeds 58--61 are reserved for frozen confirmatory replications. No V2 performance improvement may be claimed until those jobs complete and the paired results meet the preregistered BER/SER/NMSE criteria. A separate unseen-SNR/velocity evaluation is also required before a broad generalization claim.
+
+### Current paper claim
+
+The strongest completed evidence is a small pooled BER reduction from the V1 SNR-specialist pilot, with seed-level heterogeneity and a simulator-noise dependency. It is promising but not sufficient for a strong paper claim. The V2 noise-aware receiver experiment is the current path to a more defensible result. Do not claim universal superiority, real-radio deployment, or novelty of OTFS adaptation/unfolding itself. The current OAMP-DL code is a learned iterative matched-filter residual-update network; it is not a mathematically faithful classical OAMP implementation.
