@@ -179,15 +179,18 @@ def infer_all_models(
 ) -> tuple[dict[str, np.ndarray], pd.DataFrame]:
     predictions = {name: [] for name in models}
     feature_rows = []
+    # Compute features one frame at a time so the offline batch router and the
+    # actual single-frame router use numerically identical feature vectors.
+    for index, packed_cpu in enumerate(packed_samples):
+        packed = packed_cpu.unsqueeze(0).to(device)
+        row = shared_features(feature_model, packed).cpu().numpy()[0]
+        feature_rows.append({
+            "sample_index": index,
+            **{f"x{i}": float(v) for i, v in enumerate(row)},
+        })
     for start in range(0, len(packed_samples), batch_size):
         batch_items = packed_samples[start:start + batch_size]
         batch = torch.stack(batch_items).to(device)
-        features = shared_features(feature_model, batch).cpu().numpy()
-        for local, row in enumerate(features):
-            feature_rows.append({
-                "sample_index": start + local,
-                **{f"x{i}": float(v) for i, v in enumerate(row)},
-            })
         for name, model in models.items():
             model.eval()
             estimate = model(batch).cpu().numpy()
@@ -235,13 +238,17 @@ def fit_shared_router(
         scale = x.std(axis=0)
         scale[scale < 1e-8] = 1.0
         xz = (x - mean) / scale
-        xt = (test_features[feature_cols].to_numpy(dtype=np.float64) - mean) / scale
+        test_x = test_features[feature_cols].to_numpy(dtype=np.float64)
         x_design = np.column_stack((np.ones(len(xz)), xz))
-        xt_design = np.column_stack((np.ones(len(xt)), xt))
         penalty = np.eye(x_design.shape[1]) * alpha
         penalty[0, 0] = 0.0
         beta = np.linalg.solve(x_design.T @ x_design + penalty, x_design.T @ y)
-        predictions[receiver] = xt_design @ beta
+        # Match predict_one's per-frame arithmetic exactly to avoid BLAS batch
+        # rounding changing a near-tied receiver selection.
+        predictions[receiver] = np.asarray([
+            np.dot(np.concatenate(([1.0], (row - mean) / scale)), beta)
+            for row in test_x
+        ], dtype=np.float64)
         parameters[receiver] = {
             "mean": mean.tolist(),
             "scale": scale.tolist(),
@@ -343,6 +350,7 @@ def main() -> None:
     )
 
     def train_generalist(mode: str, name: str) -> OAMPDLDetector:
+        set_seed(args.seed)
         model = OAMPDLDetector(obs, symbols, iterations).to(device)
         model.load_state_dict(base_checkpoint["model_state_dict"])
         train_loader = DataLoader(
@@ -380,6 +388,7 @@ def main() -> None:
     specialist_history = {"velocity": {}, "snr": {}}
 
     def train_specialist(subset: pd.DataFrame, regime_name: str, regime_value: int):
+        set_seed(args.seed + int(regime_value))
         dataset = V2ReceiverDataset(subset, raw_dir, config, "estimated")
         loader = DataLoader(dataset, batch_size=1, shuffle=True, num_workers=0)
         model = OAMPDLDetector(obs, symbols, iterations).to(device)
