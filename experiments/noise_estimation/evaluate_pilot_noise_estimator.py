@@ -50,12 +50,15 @@ def main() -> None:
     test_meta = full_meta.loc[full_meta.split.astype(str).str.lower() == "test"].reset_index(drop=True)
 
     rows = []
+    column_rows = []
     for idx, row in test_meta.iterrows():
         with np.load(raw_dir / str(row["file"]), allow_pickle=False) as sample:
             rx_dd = np.asarray(sample["rx_dd"])
+            true_path_delays = np.asarray(sample["lis"], dtype=int)
         estimate = estimate_noise_power_from_rx_dd(rx_dd, run_config)
         truth = float(row["noise_power"])
-        rows.append({
+        column_power = np.mean(np.abs(rx_dd) ** 2, axis=0)
+        record = {
             "sample_index": idx,
             "snr_db": int(row["snr_db"]),
             "velocity_kmh": int(row["velocity_kmh"]),
@@ -64,10 +67,28 @@ def main() -> None:
             "ratio_estimated_to_true": estimate / truth,
             "relative_error": (estimate - truth) / truth,
             "absolute_log_error": abs(float(np.log(estimate / truth))),
-        })
+            "true_path_delays_offline_audit_only": json.dumps(true_path_delays.tolist()),
+            "minimum_delay_column_power": float(column_power.min()),
+            "minimum_delay_column_index": int(column_power.argmin()),
+        }
+        record.update({f"delay_col_power_{j:02d}": float(v) for j, v in enumerate(column_power)})
+        rows.append(record)
+        for delay_index, power in enumerate(column_power):
+            column_rows.append({
+                "sample_index": idx,
+                "snr_db": int(row["snr_db"]),
+                "velocity_kmh": int(row["velocity_kmh"]),
+                "delay_index": delay_index,
+                "mean_received_power": float(power),
+                "simulator_noise_power_for_offline_audit_only": truth,
+                "power_to_noise_ratio": float(power / truth),
+                "contains_true_path_delay_offline_audit_only": bool(delay_index - ((int(run_config.otfs.M) - 1)//2) in true_path_delays),
+            })
 
     results = pd.DataFrame(rows)
     results.to_csv(output / "per_sample_noise_estimates.csv", index=False)
+    column_frame = pd.DataFrame(column_rows)
+    column_frame.to_csv(output / "delay_column_power_diagnostics.csv", index=False)
     condition = results.groupby(["snr_db", "velocity_kmh"], as_index=False).agg(
         frames=("sample_index", "count"),
         mean_estimated_noise=("estimated_noise_power", "mean"),
@@ -91,7 +112,7 @@ def main() -> None:
         "simulator_noise_power_used_at_inference": False,
         "tx_dd_or_h_dd_used_at_inference": False,
         "simulator_noise_power_used_for_offline_audit_only": True,
-        "assumption": "single embedded pilot; positive channel delays [1,max_delay]; configured guard geometry isolates pilot-delay column from signal",
+        "assumption_under_test": "single embedded pilot; positive channel delays [1,max_delay]; configured guard geometry isolates pilot-delay column from signal",
         "ratio_estimated_to_true": {
             "mean": float(ratios.mean()),
             "median": float(np.median(ratios)),
@@ -104,10 +125,12 @@ def main() -> None:
         },
         "within_20_percent_fraction": float(np.mean(np.abs(ratios - 1.0) <= 0.20)),
         "within_30_percent_fraction": float(np.mean(np.abs(ratios - 1.0) <= 0.30)),
+        "mean_received_power_by_delay_column_overall": column_frame.groupby("delay_index").mean_received_power.mean().to_dict(),
         "condition_results": condition.to_dict(orient="records"),
+        "diagnostic_note": "Per-delay-column powers and true path delays are exported for offline diagnosis only; they are not inputs to the estimator.",
         "limitations": [
-            "Only 16 complex guard samples are available per frame, so per-frame noise estimates have sampling variance.",
-            "The estimator depends on the current positive-delay and pilot/guard layout; it must be re-derived if the waveform or channel delay support changes.",
+            "Only 16 complex samples are available in the proposed column per frame, so per-frame noise estimates have sampling variance.",
+            "The noise-only-column assumption must be verified against actual channel support and the generated DD grid before integration.",
             "This experiment evaluates noise estimation, not receiver BER improvement. Receiver fine-tuning with estimated noise is a separate experiment.",
         ],
     }
