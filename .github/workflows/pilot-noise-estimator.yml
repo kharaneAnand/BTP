@@ -6,9 +6,8 @@ on:
       - "research/pilot-noise-estimator"
     paths:
       - "models/supervisor/pilot_noise_estimator.py"
-      - "experiments/noise_estimation/**"
+      - "experiments/noise_estimation/evaluate_pilot_noise_estimator.py"
       - "tests/test_pilot_noise_estimator.py"
-      - ".github/workflows/pilot-noise-estimator.yml"
   workflow_dispatch:
 
 concurrency:
