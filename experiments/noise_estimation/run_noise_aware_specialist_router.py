@@ -26,6 +26,7 @@ sys.path.insert(0, str(ROOT))
 
 from experiments.dataset_generation.generate_otfs_dataset_v2 import generate_dataset_v2
 from models.oamp.oamp_dl import OAMPDLDetector
+from models.receivers.linear_mmse_torch import LinearMMSEDetector
 from run_pipeline import hard_decisions
 from src.config.loader import load_config
 from src.receivers.mmse import build_data_observation
@@ -387,7 +388,13 @@ def main() -> None:
     oracle_generalist = train_generalist("oracle", "oracle_noise_generalist")
     estimated_generalist = train_generalist("estimated", "noise_est_generalist")
 
-    estimated_models = {"noise_est_generalist": estimated_generalist}
+    # A structurally different, non-learned detector is included as a candidate.
+    # It uses the same deployable (y, H_hat, noise estimate) contract as OAMP-DL.
+    linear_mmse = LinearMMSEDetector(obs, symbols).to(device).eval()
+    estimated_models = {
+        "noise_est_generalist": estimated_generalist,
+        "linear_mmse": linear_mmse,
+    }
     specialist_history = {"velocity": {}, "snr": {}}
 
     def train_specialist(subset: pd.DataFrame, regime_name: str, regime_value: int):
