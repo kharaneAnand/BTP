@@ -9,10 +9,11 @@ on:
       - "experiments/noise_estimation/**"
       - "tests/test_pilot_noise_estimator.py"
       - ".github/workflows/pilot-noise-estimator.yml"
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
+
+concurrency:
+  group: pilot-noise-estimator
+  cancel-in-progress: true
 
 permissions:
   contents: read
