@@ -1,4 +1,4 @@
-"""Tests for the target-free pilot-CE noise estimator."""
+"""Tests for the target-free pilot-CE noise and channel estimators."""
 from __future__ import annotations
 
 import types
@@ -7,6 +7,7 @@ import unittest
 import numpy as np
 
 from models.supervisor.pilot_noise_estimator import (
+    estimate_channel_matrix_from_rx_dd,
     estimate_noise_power_from_rx_dd,
     pilot_guard_noise_samples,
 )
@@ -14,9 +15,17 @@ from models.supervisor.pilot_noise_estimator import (
 
 def config():
     return types.SimpleNamespace(
-        otfs=types.SimpleNamespace(M=32, N=16),
-        pilot=types.SimpleNamespace(pilot_delay_length=1, pilot_doppler_length=1),
+        otfs=types.SimpleNamespace(
+            M=32, N=16, carrier_frequency_ghz=4.0, subcarrier_spacing_khz=15.0
+        ),
+        pilot=types.SimpleNamespace(
+            pilot_delay_length=1, pilot_doppler_length=1, pilot_snr_db=25.0
+        ),
         channel=types.SimpleNamespace(max_delay=4, num_paths=4),
+        representation=types.SimpleNamespace(
+            expected_data_symbols=368,
+            expected_channel_shape=types.SimpleNamespace(rows=432, cols=368),
+        ),
     )
 
 
@@ -53,6 +62,13 @@ class PilotGuardNoiseEstimatorTests(unittest.TestCase):
             rx, _ = self._frame_with_one_empty_ce_delay(rng, noise_power)
             estimates.append(estimate_noise_power_from_rx_dd(rx, config()))
         self.assertAlmostEqual(float(np.mean(estimates)), noise_power, delta=0.002)
+
+    def test_rebuilds_channel_matrix_without_transmitted_or_true_channel_inputs(self):
+        rx = np.zeros((16, 32), dtype=np.complex64)
+        estimated = estimate_channel_matrix_from_rx_dd(rx, 0.1, config())
+        self.assertEqual(estimated.shape, (432, 368))
+        self.assertTrue(np.isfinite(estimated.real).all())
+        self.assertTrue(np.isfinite(estimated.imag).all())
 
     def test_rejects_incompatible_multi_pilot_configuration(self):
         cfg = config()
