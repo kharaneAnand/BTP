@@ -77,10 +77,11 @@ For each seed and pooled confirmatory set, report:
 The V2 expanded bank is considered a paper-worthy accuracy improvement only if:
 1. Pooled paired BER 95% CI versus the noise-estimated static generalist is entirely below zero across seeds 58--61.
 2. At least three of the four confirmatory seeds have lower BER; any regression seed is reported and explained.
-3. SER is not materially worse and NMSE is reported with its paired interval.
-4. The expanded bank's result is not achieved by simulator SNR/noise labels, test-label routing, true channel inputs, or oracle channel-estimation thresholds.
-5. The single-pass router's measured latency and model footprint are reported.
-6. The same method is evaluated on a separate unseen-SNR/velocity test after the primary confirmatory results are frozen.
+3. The upper endpoint of the pooled paired SER-difference 95% interval is below a predeclared 1% relative non-inferiority margin (0.01 times the static baseline SER).
+4. The upper endpoint of the pooled paired NMSE-difference 95% interval is below a predeclared 1% relative non-inferiority margin (0.01 times the static baseline NMSE).
+5. The expanded bank's result is not achieved by simulator SNR/noise labels, test-label routing, true channel inputs, or oracle channel-estimation thresholds.
+6. The single-pass router's measured latency and model footprint are reported.
+7. The same method is evaluated on a separate unseen-SNR/velocity test after the primary confirmatory results are frozen.
 
 The oracle-noise baseline is a reference, not the deployment comparator. If the expanded bank fails these criteria, report the negative/inconclusive result and continue with a justified next experiment rather than tuning on the same test sets.
 
