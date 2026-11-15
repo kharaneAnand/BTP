@@ -83,3 +83,16 @@ The V2 expanded bank is considered a paper-worthy accuracy improvement only if:
 6. The same method is evaluated on a separate unseen-SNR/velocity test after the primary confirmatory results are frozen.
 
 The oracle-noise baseline is a reference, not the deployment comparator. If the expanded bank fails these criteria, report the negative/inconclusive result and continue with a justified next experiment rather than tuning on the same test sets.
+
+
+## Exploratory noise-estimator diagnostics (seeds 55/56)
+
+These runs are development diagnostics only; they are not confirmatory receiver results.
+
+- The first fixed pilot-delay-column estimator failed: it overestimated simulator noise by approximately 6.2x on seed 56.
+- Source inspection found the cause: the channel generator explicitly moves the minimum-delay path to zero, so the nominal pilot-delay column contains a real path response and is not noise-only.
+- The corrected raw estimator selects the minimum-energy column within the five pilot CE delay columns. The channel has four paths and five possible integer delay bins, so at least one CE column is unoccupied under the current channel model.
+- On the two exploratory test sets, the raw estimated/true noise-power ratio was 0.9487 (seed 55) and 0.9342 (seed 56). The condition-stratified 95% intervals were [0.9096, 0.9889] and [0.8974, 0.9714]. The estimator therefore has a consistent downward bias of roughly 5--7%.
+- The raw estimate was within 30% of true noise on 71.9% and 79.3% of frames, respectively. Per-frame dispersion is expected because only 16 complex Doppler samples are averaged.
+
+A multiplicative calibration is now fitted from the training split only and evaluated on held-out validation/test frames. Seeds 55/56 remain exploratory because they informed the estimator correction; the V2 receiver smoke seed 57 is also exploratory. Confirmatory receiver evidence must come from frozen fresh seeds 58--61.
