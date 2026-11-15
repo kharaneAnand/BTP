@@ -175,12 +175,18 @@ def infer_all_models(
     feature_model: OAMPDLDetector,
     packed_samples: list[torch.Tensor],
     device: torch.device,
-    batch_size: int = 4,
+    batch_size: int = 1,
 ) -> tuple[dict[str, np.ndarray], pd.DataFrame]:
+    """Run frame-by-frame inference to match the deployed single-frame path.
+
+    Batched GEMM kernels can produce small floating-point differences from a
+    batch-size-one forward pass. Since the final receiver is invoked one frame
+    at a time, offline candidate predictions must use the same batch size;
+    otherwise a strict equivalence audit can fail on harmless kernel drift.
+    """
+    del batch_size  # Kept for call-site compatibility; inference is deliberately B=1.
     predictions = {name: [] for name in models}
     feature_rows = []
-    # Compute features one frame at a time so the offline batch router and the
-    # actual single-frame router use numerically identical feature vectors.
     for index, packed_cpu in enumerate(packed_samples):
         packed = packed_cpu.unsqueeze(0).to(device)
         row = shared_features(feature_model, packed).cpu().numpy()[0]
@@ -188,13 +194,10 @@ def infer_all_models(
             "sample_index": index,
             **{f"x{i}": float(v) for i, v in enumerate(row)},
         })
-    for start in range(0, len(packed_samples), batch_size):
-        batch_items = packed_samples[start:start + batch_size]
-        batch = torch.stack(batch_items).to(device)
         for name, model in models.items():
             model.eval()
-            estimate = model(batch).cpu().numpy()
-            predictions[name].extend([estimate[i] for i in range(len(estimate))])
+            estimate = model(packed).cpu().numpy()[0]
+            predictions[name].append(estimate)
     return {k: np.asarray(v) for k, v in predictions.items()}, pd.DataFrame(feature_rows)
 
 
