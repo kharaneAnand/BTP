@@ -6,7 +6,7 @@ from models.receivers.linear_mmse_torch import LinearMMSEDetector
 
 
 def pack(y, h, noise):
-    return torch.cat((y, h.reshape(1, -1), torch.tensor([noise], dtype=torch.complex64)), dim=1)
+    return torch.cat((y, h.reshape(1, -1), torch.tensor([[noise]], dtype=torch.complex64)), dim=1)
 
 
 def test_linear_mmse_matches_numpy_reference():
