@@ -1,0 +1,58 @@
+name: SNR-specialist receiver bank comparison
+
+on:
+  push:
+    branches:
+      - "research/snr-specialist-bank"
+    paths:
+      - "experiments/specialist_router/run_snr_specialist_router.py"
+      - ".github/workflows/snr-specialist-router.yml"
+      - "tests/test_snr_specialist_router.py"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snr-specialist-routing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [53, 54]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install numerical dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pandas PyYAML scipy matplotlib textremo-toolbox
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Run SNR-specialist bank comparison
+        env:
+          PYTHONPATH: .
+          OMP_NUM_THREADS: "2"
+          MKL_NUM_THREADS: "2"
+        run: |
+          python -m unittest tests.test_snr_specialist_router
+          python experiments/specialist_router/run_snr_specialist_router.py \
+            --seed ${{ matrix.seed }} \
+            --device cpu \
+            --output-dir experiments/specialist_router/snr_results/seed${{ matrix.seed }}
+      - name: Upload independent comparison results
+        uses: actions/upload-artifact@v4
+        with:
+          name: snr-specialist-router-seed-${{ matrix.seed }}
+          path: |
+            experiments/specialist_router/snr_results/seed${{ matrix.seed }}/summary.json
+            experiments/specialist_router/snr_results/seed${{ matrix.seed }}/decision_log.csv
+            experiments/specialist_router/snr_results/seed${{ matrix.seed }}/validation_receiver_metrics.csv
+            experiments/specialist_router/snr_results/seed${{ matrix.seed }}/test_receiver_metrics.csv
+            experiments/specialist_router/snr_results/seed${{ matrix.seed }}/checkpoints/*.pt
+          if-no-files-found: error
