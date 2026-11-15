@@ -53,4 +53,5 @@ jobs:
             experiments/noise_estimation/results/seed${{ matrix.seed }}/summary.json
             experiments/noise_estimation/results/seed${{ matrix.seed }}/per_sample_noise_estimates.csv
             experiments/noise_estimation/results/seed${{ matrix.seed }}/per_condition_noise_estimates.csv
+            experiments/noise_estimation/results/seed${{ matrix.seed }}/delay_column_power_diagnostics.csv
           if-no-files-found: error
