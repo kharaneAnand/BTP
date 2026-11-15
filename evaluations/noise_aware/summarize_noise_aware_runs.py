@@ -142,17 +142,23 @@ def main() -> None:
     seed_ber_wins = int((per_seed["expanded_minus_static_ber"] < 0).sum())
     integrity = all(
         bool(s["test_labels_used_for_router_fit_or_actions"] is False)
+        and bool(s["test_h_dd_or_tx_dd_used_before_inference_completed"] is False)
         and bool(s["simulator_noise_power_used_for_deployable_receiver_input"] is False)
         and bool(s["simulator_h_hat_used_for_deployable_receiver_input"] is False)
+        and sum(s["single_pass_inference"]["receiver_selection_counts"].values()) == int(s["test_frames"])
         for s in summaries.values()
     )
-    paper_ready_accuracy_gate = (
+    primary_accuracy_gate = (
         ber_upper < 0.0
         and seed_ber_wins >= 3
         and ser_upper < ser_margin
         and nmse_upper < nmse_margin
         and integrity
     )
+    # A separate frozen unseen-SNR/velocity evaluation is intentionally not
+    # inferred from these in-range V2 seeds.
+    unseen_condition_evaluation_completed = False
+    overall_paper_ready = primary_accuracy_gate and unseen_condition_evaluation_completed
     pooled_summary = {
         "seeds": args.seeds,
         "test_frames": len(frame),
@@ -162,11 +168,13 @@ def main() -> None:
         "ser_noninferiority_margin_absolute": ser_margin,
         "nmse_noninferiority_margin_absolute": nmse_margin,
         "integrity_contract_passed": integrity,
-        "paper_ready_accuracy_gate_passed": bool(paper_ready_accuracy_gate),
+        "primary_accuracy_gate_passed": bool(primary_accuracy_gate),
+        "unseen_condition_evaluation_completed": unseen_condition_evaluation_completed,
+        "overall_paper_ready": bool(overall_paper_ready),
         "claim_boundary": (
-            "Accuracy gate passed on the tested V2 simulator only; broader unseen-condition and hardware evidence is still required."
-            if paper_ready_accuracy_gate
-            else "Do not claim paper-ready superiority: one or more preregistered pooled/per-seed/noninferiority/integrity criteria failed."
+            "Primary confirmatory accuracy/integrity gate passed on the tested V2 simulator. Do not claim broad generalization until the separate unseen-SNR/velocity evaluation is completed; no measured-radio validation is included."
+            if primary_accuracy_gate
+            else "Do not claim superiority: one or more preregistered pooled/per-seed/noninferiority/integrity criteria failed."
         ),
         "noise_estimator_mean_ratio_across_seeds": float(
             np.mean([summaries[s]["noise_estimation_test"]["estimated_to_true_ratio_mean"] for s in args.seeds])
