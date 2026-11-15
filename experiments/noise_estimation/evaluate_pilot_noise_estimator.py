@@ -1,4 +1,4 @@
-"""Evaluate candidate pilot-CE noise estimators on fresh held-out OTFS datasets."""
+"""Evaluate and training-calibrate the target-free pilot-CE noise estimator."""
 from __future__ import annotations
 
 import argparse
@@ -34,6 +34,71 @@ def stratified_bootstrap_mean(values: np.ndarray, metadata: pd.DataFrame,
     return [float(np.quantile(samples, 0.025)), float(np.quantile(samples, 0.975))]
 
 
+def estimate_split(metadata: pd.DataFrame, raw_dir: Path, config, include_diagnostics: bool):
+    rows = []
+    column_rows = []
+    for idx, row in metadata.reset_index(drop=True).iterrows():
+        with np.load(raw_dir / str(row["file"]), allow_pickle=False) as sample:
+            rx_dd = np.asarray(sample["rx_dd"])
+            true_path_delays = np.asarray(sample["lis"], dtype=int) if include_diagnostics else None
+        raw_estimate = estimate_noise_power_from_rx_dd(rx_dd, config)
+        truth = float(row["noise_power"])
+        selected_col = pilot_guard_noise_column_index(rx_dd, config)
+        record = {
+            "sample_index": idx,
+            "snr_db": int(row["snr_db"]),
+            "velocity_kmh": int(row["velocity_kmh"]),
+            "raw_estimated_noise_power": raw_estimate,
+            "simulator_noise_power_for_offline_audit_only": truth,
+            "raw_ratio_estimated_to_true": raw_estimate / truth,
+            "raw_relative_error": (raw_estimate - truth) / truth,
+            "raw_absolute_log_error": abs(float(np.log(raw_estimate / truth))),
+            "selected_noise_delay_column": selected_col,
+        }
+        if include_diagnostics:
+            column_power = np.mean(np.abs(rx_dd) ** 2, axis=0)
+            record["true_path_delays_offline_audit_only"] = json.dumps(true_path_delays.tolist())
+            record["unique_true_path_delays_offline_audit_only"] = len(np.unique(true_path_delays))
+            record["minimum_delay_column_power"] = float(column_power.min())
+            record["minimum_delay_column_index"] = int(column_power.argmin())
+            record.update({f"delay_col_power_{j:02d}": float(v) for j, v in enumerate(column_power)})
+            for delay_index, power in enumerate(column_power):
+                column_rows.append({
+                    "sample_index": idx,
+                    "snr_db": int(row["snr_db"]),
+                    "velocity_kmh": int(row["velocity_kmh"]),
+                    "delay_index": delay_index,
+                    "mean_received_power": float(power),
+                    "simulator_noise_power_for_offline_audit_only": truth,
+                    "power_to_noise_ratio": float(power / truth),
+                    "contains_true_path_delay_offline_audit_only": bool(
+                        delay_index - ((int(config.otfs.M) - 1) // 2) in true_path_delays
+                    ),
+                })
+        rows.append(record)
+    return pd.DataFrame(rows), pd.DataFrame(column_rows)
+
+
+def summarize_split(results: pd.DataFrame, metadata: pd.DataFrame, scale: float, seed: int):
+    calibrated = results["raw_estimated_noise_power"].to_numpy(dtype=np.float64) * scale
+    truth = results["simulator_noise_power_for_offline_audit_only"].to_numpy(dtype=np.float64)
+    ratio = calibrated / truth
+    log_error = np.abs(np.log(ratio))
+    return {
+        "frames": len(results),
+        "calibrated_ratio_mean": float(ratio.mean()),
+        "calibrated_ratio_median": float(np.median(ratio)),
+        "calibrated_ratio_std": float(ratio.std(ddof=1)),
+        "calibrated_ratio_mean_ci95_condition_stratified": stratified_bootstrap_mean(
+            ratio, metadata.reset_index(drop=True), seed
+        ),
+        "calibrated_absolute_log_error_mean": float(log_error.mean()),
+        "calibrated_absolute_log_error_median": float(np.median(log_error)),
+        "calibrated_within_20_percent_fraction": float(np.mean(np.abs(ratio - 1.0) <= 0.20)),
+        "calibrated_within_30_percent_fraction": float(np.mean(np.abs(ratio - 1.0) <= 0.30)),
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, required=True)
@@ -50,96 +115,69 @@ def main() -> None:
     raw_dir, _, full_meta, run_config = prepare_generated_dataset(
         config, output / "generated", args.seed
     )
+    train_meta = full_meta.loc[full_meta.split.astype(str).str.lower() == "train"].reset_index(drop=True)
+    validation_meta = full_meta.loc[full_meta.split.astype(str).str.lower() == "validation"].reset_index(drop=True)
     test_meta = full_meta.loc[full_meta.split.astype(str).str.lower() == "test"].reset_index(drop=True)
-    pilot_delay = (int(run_config.otfs.M) - 1) // 2
-    ce_delay_indices = list(range(pilot_delay, pilot_delay + int(run_config.channel.max_delay) + 1))
 
-    rows = []
-    column_rows = []
-    for idx, row in test_meta.iterrows():
-        with np.load(raw_dir / str(row["file"]), allow_pickle=False) as sample:
-            rx_dd = np.asarray(sample["rx_dd"])
-            true_path_delays = np.asarray(sample["lis"], dtype=int)
-        estimate = estimate_noise_power_from_rx_dd(rx_dd, run_config)
-        selected_col = pilot_guard_noise_column_index(rx_dd, run_config)
-        truth = float(row["noise_power"])
-        column_power = np.mean(np.abs(rx_dd) ** 2, axis=0)
-        record = {
-            "sample_index": idx,
-            "snr_db": int(row["snr_db"]),
-            "velocity_kmh": int(row["velocity_kmh"]),
-            "estimated_noise_power": estimate,
-            "selected_noise_delay_column": selected_col,
-            "simulator_noise_power_for_offline_audit_only": truth,
-            "ratio_estimated_to_true": estimate / truth,
-            "relative_error": (estimate - truth) / truth,
-            "absolute_log_error": abs(float(np.log(estimate / truth))),
-            "true_path_delays_offline_audit_only": json.dumps(true_path_delays.tolist()),
-            "unique_true_path_delays_offline_audit_only": len(np.unique(true_path_delays)),
-            "minimum_delay_column_power": float(column_power.min()),
-            "minimum_delay_column_index": int(column_power.argmin()),
-        }
-        record.update({f"delay_col_power_{j:02d}": float(v) for j, v in enumerate(column_power)})
-        rows.append(record)
-        for delay_index, power in enumerate(column_power):
-            column_rows.append({
-                "sample_index": idx,
-                "snr_db": int(row["snr_db"]),
-                "velocity_kmh": int(row["velocity_kmh"]),
-                "delay_index": delay_index,
-                "mean_received_power": float(power),
-                "simulator_noise_power_for_offline_audit_only": truth,
-                "power_to_noise_ratio": float(power / truth),
-                "contains_true_path_delay_offline_audit_only": bool(delay_index - pilot_delay in true_path_delays),
-            })
+    # The multiplicative calibration is fitted on training labels only.
+    train_rows, _ = estimate_split(train_meta, raw_dir, run_config, include_diagnostics=False)
+    train_ratio = (
+        train_rows["simulator_noise_power_for_offline_audit_only"].to_numpy(dtype=np.float64)
+        / train_rows["raw_estimated_noise_power"].to_numpy(dtype=np.float64)
+    )
+    calibration_scale = float(np.exp(np.mean(np.log(train_ratio))))
 
-    results = pd.DataFrame(rows)
-    results.to_csv(output / "per_sample_noise_estimates.csv", index=False)
-    column_frame = pd.DataFrame(column_rows)
+    validation_rows, _ = estimate_split(validation_meta, raw_dir, run_config, include_diagnostics=False)
+    test_rows, column_frame = estimate_split(test_meta, raw_dir, run_config, include_diagnostics=True)
+
+    for frame in (validation_rows, test_rows):
+        frame["calibrated_estimated_noise_power"] = frame["raw_estimated_noise_power"] * calibration_scale
+        frame["calibrated_ratio_estimated_to_true"] = (
+            frame["calibrated_estimated_noise_power"]
+            / frame["simulator_noise_power_for_offline_audit_only"]
+        )
+        frame["calibrated_relative_error"] = frame["calibrated_ratio_estimated_to_true"] - 1.0
+        frame["calibrated_absolute_log_error"] = np.abs(
+            np.log(frame["calibrated_ratio_estimated_to_true"])
+        )
+
+    test_rows.to_csv(output / "per_sample_noise_estimates.csv", index=False)
     column_frame.to_csv(output / "delay_column_power_diagnostics.csv", index=False)
-    condition = results.groupby(["snr_db", "velocity_kmh"], as_index=False).agg(
+    condition = test_rows.groupby(["snr_db", "velocity_kmh"], as_index=False).agg(
         frames=("sample_index", "count"),
-        mean_estimated_noise=("estimated_noise_power", "mean"),
-        mean_true_noise=("simulator_noise_power_for_offline_audit_only", "mean"),
-        mean_ratio=("ratio_estimated_to_true", "mean"),
-        median_ratio=("ratio_estimated_to_true", "median"),
-        relative_error_std=("relative_error", "std"),
-        log_error_mean=("absolute_log_error", "mean"),
+        mean_raw_ratio=("raw_ratio_estimated_to_true", "mean"),
+        mean_calibrated_ratio=("calibrated_ratio_estimated_to_true", "mean"),
+        median_calibrated_ratio=("calibrated_ratio_estimated_to_true", "median"),
+        calibrated_relative_error_std=("calibrated_relative_error", "std"),
+        calibrated_log_error_mean=("calibrated_absolute_log_error", "mean"),
     )
     condition.to_csv(output / "per_condition_noise_estimates.csv", index=False)
 
-    ratios = results["ratio_estimated_to_true"].to_numpy(dtype=np.float64)
-    log_errors = results["absolute_log_error"].to_numpy(dtype=np.float64)
+    selected_counts = test_rows["selected_noise_delay_column"].value_counts().sort_index().to_dict()
     summary = {
         "seed": args.seed,
-        "test_frames": len(results),
         "estimator": "minimum mean received power among pilot CE delay columns",
-        "pilot_ce_delay_indices": ce_delay_indices,
+        "pilot_ce_delay_indices": list(range(
+            (int(run_config.otfs.M) - 1) // 2,
+            (int(run_config.otfs.M) - 1) // 2 + int(run_config.channel.max_delay) + 1
+        )),
         "pilot_samples_per_column": int(run_config.otfs.N),
-        "inputs_used": ["rx_dd", "fixed public OTFS/pilot/channel configuration"],
+        "training_calibration_samples": len(train_rows),
+        "calibration_method": "geometric-mean multiplicative correction fitted on training split only",
+        "calibration_scale": calibration_scale,
+        "inputs_used_at_inference": ["rx_dd", "fixed public OTFS/pilot/channel configuration", "frozen training calibration scalar"],
         "simulator_noise_power_used_at_inference": False,
         "tx_dd_or_h_dd_used_at_inference": False,
-        "simulator_noise_power_used_for_offline_audit_only": True,
-        "assumption_under_test": "four or fewer channel paths occupy at most four of the five pilot CE delay columns; fractional Doppler spreads within a delay column",
-        "selected_noise_column_counts": results["selected_noise_delay_column"].value_counts().sort_index().to_dict(),
-        "ratio_estimated_to_true": {
-            "mean": float(ratios.mean()),
-            "median": float(np.median(ratios)),
-            "std": float(ratios.std(ddof=1)),
-            "mean_ci95_condition_stratified": stratified_bootstrap_mean(ratios, test_meta, args.seed + 9000),
-        },
-        "absolute_log_error": {
-            "mean": float(log_errors.mean()),
-            "median": float(np.median(log_errors)),
-        },
-        "within_20_percent_fraction": float(np.mean(np.abs(ratios - 1.0) <= 0.20)),
-        "within_30_percent_fraction": float(np.mean(np.abs(ratios - 1.0) <= 0.30)),
-        "mean_received_power_by_delay_column_overall": column_frame.groupby("delay_index").mean_received_power.mean().to_dict(),
+        "simulator_noise_power_used_for_offline_calibration_and_audit_only": True,
+        "selected_noise_column_counts_test": selected_counts,
+        "raw_test": summarize_split(test_rows, test_meta, 1.0, args.seed + 8000),
+        "calibrated_validation": summarize_split(validation_rows, validation_meta, calibration_scale, args.seed + 8500),
+        "calibrated_test": summarize_split(test_rows, test_meta, calibration_scale, args.seed + 9000),
         "condition_results": condition.to_dict(orient="records"),
         "diagnostic_note": "Per-delay-column powers and true path delays are exported for offline diagnosis only; they are not inputs to the estimator.",
         "limitations": [
-            "Selecting the minimum among multiple noise-only delay columns can introduce downward selection bias.",
-            "Only 16 complex samples are available per selected column, so per-frame estimates have sampling variance.",
+            "The minimum-energy CE-column estimator can be downward-biased when multiple noise-only columns compete; the training-only scalar calibration corrects average bias but not all frame-level variation.",
+            "Only 16 complex samples are available per selected column, so per-frame estimates retain sampling variance.",
             "This experiment evaluates noise estimation, not receiver BER improvement. Receiver fine-tuning with estimated noise is a separate experiment.",
         ],
     }
