@@ -97,3 +97,15 @@ These runs are development diagnostics only; they are not confirmatory receiver 
 - The raw estimate was within 30% of true noise on 71.9% and 79.3% of frames, respectively. Per-frame dispersion is expected because only 16 complex Doppler samples are averaged.
 
 A multiplicative calibration is now fitted from the training split only and evaluated on held-out validation/test frames. Seeds 55/56 remain exploratory because they informed the estimator correction; the V2 receiver smoke seed 57 is also exploratory. Confirmatory receiver evidence must come from frozen fresh seeds 58--61.
+
+
+### Training-only calibration results (exploratory seeds 55/56)
+
+The V1 minimum-CE-column estimator was calibrated with a single geometric-mean multiplicative factor fitted on the 630-frame training split of each seed. The validation and test labels were not used to fit the factor.
+
+| Seed | Training scale | Test estimated/true noise ratio | Condition-stratified 95% CI | Within 20% | Within 30% |
+|---:|---:|---:|---:|---:|---:|
+| 55 | 1.0904 | 1.0345 | [0.9919, 1.0782] | 52.6% | 73.3% |
+| 56 | 1.0852 | 1.0138 | [0.9739, 1.0542] | 60.0% | 80.0% |
+
+The training-only scalar calibration removes the average downward bias on these two held-out test splits (both confidence intervals include 1.0). Per-frame dispersion remains substantial: the standard deviation of the calibrated ratio is approximately 0.25--0.27. This is expected from estimating a variance using only 16 complex samples in one selected delay column. The estimator is therefore suitable as a noisy receiver-side input candidate for V2 training, not as a high-precision per-frame noise measurement. Temporal smoothing or a richer pilot-domain estimator may still be needed.
