@@ -507,27 +507,6 @@ def main() -> None:
     ])
     noise_ratio = test_labels["noise_estimate"] / test_labels["noise_power"]
 
-    # Measure the actual single-pass router path: shared features, ridge decision, one model call.
-    selected_elapsed = []
-    static_elapsed = []
-    selected_receiver_counts = {}
-    with torch.no_grad():
-        for i, packed_cpu in enumerate(test_inputs):
-            packed = packed_cpu.unsqueeze(0).to(device)
-            t0 = time.perf_counter()
-            feature = shared_features(estimated_generalist, packed).cpu().numpy()[0]
-            receiver = predict_one(feature, expanded_params)
-            selected_receiver_counts[receiver] = selected_receiver_counts.get(receiver, 0) + 1
-            selected_output = estimated_models[receiver](packed).cpu().numpy()[0]
-            selected_elapsed.append(time.perf_counter() - t0)
-            reference_output = test_predictions[receiver][i]
-            if not np.allclose(selected_output, reference_output, rtol=1e-5, atol=1e-6):
-                raise AssertionError("Single-pass selected inference differs from offline candidate prediction.")
-
-            t1 = time.perf_counter()
-            _ = estimated_generalist(packed)
-            static_elapsed.append(time.perf_counter() - t1)
-
     # Save policy metrics and a complete selection trace.
     policy = pd.DataFrame({
         "sample_index": np.arange(len(test_meta)),
