@@ -109,3 +109,6 @@ The V1 minimum-CE-column estimator was calibrated with a single geometric-mean m
 | 56 | 1.0852 | 1.0138 | [0.9739, 1.0542] | 60.0% | 80.0% |
 
 The training-only scalar calibration removes the average downward bias on these two held-out test splits (both confidence intervals include 1.0). Per-frame dispersion remains substantial: the standard deviation of the calibrated ratio is approximately 0.25--0.27. This is expected from estimating a variance using only 16 complex samples in one selected delay column. The estimator is therefore suitable as a noisy receiver-side input candidate for V2 training, not as a high-precision per-frame noise measurement. Temporal smoothing or a richer pilot-domain estimator may still be needed.
+
+
+Across the two exploratory calibrated-noise test sets combined (270 frames), the mean estimated/true noise ratio was 1.0241 with a condition-stratified 95% bootstrap interval [0.9948, 1.0536]. The ratio was within 20% of true noise on 56.3% of frames and within 30% on 76.7%. Thus average calibration is close to unbiased, but per-frame uncertainty remains a limitation for receiver-side CSI thresholding.
