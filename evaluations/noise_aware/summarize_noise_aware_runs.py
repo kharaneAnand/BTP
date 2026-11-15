@@ -69,22 +69,19 @@ def main() -> None:
 
     per_seed_rows = []
     for seed in args.seeds:
-        subset = frame.loc[frame.seed == seed]
+        subset = frame.loc[frame.seed == seed].reset_index(drop=True)
         row = {"seed": seed, "test_frames": len(subset)}
         for metric in ("ber", "ser", "nmse"):
             static = subset[cols[("expanded", "static", metric)]].to_numpy(dtype=float)
             expanded = subset[cols[("expanded", "routed", metric)]].to_numpy(dtype=float)
             velocity = subset[cols[("velocity", "routed", metric)]].to_numpy(dtype=float)
             delta = expanded - static
+            ci = stratified_bootstrap(delta, subset, 7000 + seed + len(metric))
             row[f"static_{metric}"] = float(static.mean())
             row[f"expanded_{metric}"] = float(expanded.mean())
             row[f"expanded_minus_static_{metric}"] = float(delta.mean())
-            row[f"expanded_minus_static_{metric}_ci95_low"] = float(
-                stratified_bootstrap(delta, subset, 7000 + seed + len(metric))[0]
-            )
-            row[f"expanded_minus_static_{metric}_ci95_high"] = float(
-                stratified_bootstrap(delta, subset, 7000 + seed + len(metric))[1]
-            )
+            row[f"expanded_minus_static_{metric}_ci95_low"] = ci[0]
+            row[f"expanded_minus_static_{metric}_ci95_high"] = ci[1]
             row[f"velocity_only_{metric}"] = float(velocity.mean())
         row["noise_estimation_ratio_mean"] = float(
             summaries[seed]["noise_estimation_test"]["estimated_to_true_ratio_mean"]
