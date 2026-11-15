@@ -112,3 +112,10 @@ The training-only scalar calibration removes the average downward bias on these 
 
 
 Across the two exploratory calibrated-noise test sets combined (270 frames), the mean estimated/true noise ratio was 1.0241 with a condition-stratified 95% bootstrap interval [0.9948, 1.0536]. The ratio was within 20% of true noise on 56.3% of frames and within 30% on 76.7%. Thus average calibration is close to unbiased, but per-frame uncertainty remains a limitation for receiver-side CSI thresholding.
+
+
+## Smoke-run implementation correction
+
+The first seed-57 smoke run generated V2 data and completed both generalist fine-tuning stages and all six specialist fine-tuning stages. It then stopped before writing result artifacts because the batch-computed router selection and a separately recomputed single-frame selection disagreed on a near-tied candidate. This was a numerical-consistency assertion, not a BER/SER/NMSE result.
+
+The implementation now computes shared router features one frame at a time for both validation/test calibration and the actual single-frame path, and uses identical per-frame ridge arithmetic for candidate scoring. The smoke seed is being rerun. No performance claim is drawn from the failed run.
