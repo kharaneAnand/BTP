@@ -8,9 +8,6 @@ on:
       - "experiments/specialist_router/run_snr_specialist_router.py"
       - ".github/workflows/snr-specialist-router.yml"
       - "tests/test_snr_specialist_router.py"
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
 
 permissions:
