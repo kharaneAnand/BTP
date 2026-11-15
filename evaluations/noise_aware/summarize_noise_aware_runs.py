@@ -42,6 +42,8 @@ def main() -> None:
     for seed in args.seeds:
         seed_dir = args.results_root / f"seed{seed}"
         if not (seed_dir / "summary.json").exists():
+            seed_dir = args.results_root / f"noise-aware-seed-{seed}"
+        if not (seed_dir / "summary.json").exists():
             raise FileNotFoundError(f"Missing completed result summary for seed {seed}: {seed_dir}")
         summary = json.loads((seed_dir / "summary.json").read_text())
         metrics = pd.read_csv(seed_dir / "selected_policy_metrics.csv")
