@@ -3,9 +3,9 @@ name: Noise-aware OTFS receiver bank confirmatory replications
 on:
   push:
     branches:
-      - "research/pilot-noise-estimator"
+      - "research/lmmse-diverse-receiver"
     paths:
-      - "docs/noise-aware-confirmatory-ready.md"
+      - "docs/LMMSE_CONFIRMATORY_READY.md"
   workflow_dispatch:
 
 concurrency:
@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        seed: [58, 59, 60, 61]
+        seed: [62, 63, 64, 65]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -40,6 +40,8 @@ jobs:
           MKL_NUM_THREADS: "2"
         run: |
           python -m unittest discover -s tests -p "test_pilot_noise_estimator.py"
+          python -m pip install pytest
+          pytest -q tests/test_linear_mmse_torch.py
           python experiments/noise_estimation/run_noise_aware_specialist_router.py \
             --seed ${{ matrix.seed }} \
             --device cpu \
@@ -76,7 +78,7 @@ jobs:
         run: |
           python evaluations/noise_aware/summarize_noise_aware_runs.py \
             --results-root artifacts \
-            --seeds 58 59 60 61 \
+            --seeds 62 63 64 65 \
             --output-dir pooled-results
       - name: Upload pooled research summary
         uses: actions/upload-artifact@v4
