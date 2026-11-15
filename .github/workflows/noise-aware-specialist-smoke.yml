@@ -1,0 +1,63 @@
+name: Noise-aware OTFS specialist-bank smoke test
+
+on:
+  push:
+    branches:
+      - "research/pilot-noise-estimator"
+    paths:
+      - "configs/experiment_v2.yaml"
+      - "experiments/dataset_generation/generate_otfs_dataset_v2.py"
+      - "experiments/noise_estimation/run_noise_aware_specialist_router.py"
+      - "models/supervisor/pilot_noise_estimator.py"
+      - "tests/test_pilot_noise_estimator.py"
+      - ".github/workflows/noise-aware-specialist-smoke.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: noise-aware-specialist-smoke
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  noise-aware-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install numerical dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pandas PyYAML scipy matplotlib textremo-toolbox
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Run pilot estimator tests
+        env:
+          PYTHONPATH: .
+          OMP_NUM_THREADS: "2"
+          MKL_NUM_THREADS: "2"
+        run: python -m unittest discover -s tests -p "test_pilot_noise_estimator.py"
+      - name: Generate V2 data, train receiver bank, and evaluate smoke seed
+        env:
+          PYTHONPATH: .
+          OMP_NUM_THREADS: "2"
+          MKL_NUM_THREADS: "2"
+        run: |
+          python experiments/noise_estimation/run_noise_aware_specialist_router.py \
+            --seed 57 \
+            --device cpu \
+            --output-dir experiments/noise_estimation/noise_aware_results/seed57
+      - name: Upload smoke results and checkpoints
+        uses: actions/upload-artifact@v4
+        with:
+          name: noise-aware-specialist-smoke-seed-57
+          path: |
+            experiments/noise_estimation/noise_aware_results/seed57/summary.json
+            experiments/noise_estimation/noise_aware_results/seed57/*.csv
+            experiments/noise_estimation/noise_aware_results/seed57/checkpoints/*.pt
+            experiments/noise_estimation/noise_aware_results/seed57/training/*.csv
+            experiments/noise_estimation/noise_aware_results/seed57/dataset/processed/noise_estimator_calibration_v2.json
+          if-no-files-found: error
