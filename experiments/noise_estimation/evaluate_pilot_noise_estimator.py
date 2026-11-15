@@ -1,4 +1,4 @@
-"""Evaluate the pilot-guard noise estimator on fresh held-out OTFS datasets."""
+"""Evaluate candidate pilot-CE noise estimators on fresh held-out OTFS datasets."""
 from __future__ import annotations
 
 import argparse
@@ -13,7 +13,10 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 
-from models.supervisor.pilot_noise_estimator import estimate_noise_power_from_rx_dd
+from models.supervisor.pilot_noise_estimator import (
+    estimate_noise_power_from_rx_dd,
+    pilot_guard_noise_column_index,
+)
 from run_pipeline import prepare_generated_dataset
 from src.config.loader import load_config
 
@@ -48,6 +51,8 @@ def main() -> None:
         config, output / "generated", args.seed
     )
     test_meta = full_meta.loc[full_meta.split.astype(str).str.lower() == "test"].reset_index(drop=True)
+    pilot_delay = (int(run_config.otfs.M) - 1) // 2
+    ce_delay_indices = list(range(pilot_delay, pilot_delay + int(run_config.channel.max_delay) + 1))
 
     rows = []
     column_rows = []
@@ -56,6 +61,7 @@ def main() -> None:
             rx_dd = np.asarray(sample["rx_dd"])
             true_path_delays = np.asarray(sample["lis"], dtype=int)
         estimate = estimate_noise_power_from_rx_dd(rx_dd, run_config)
+        selected_col = pilot_guard_noise_column_index(rx_dd, run_config)
         truth = float(row["noise_power"])
         column_power = np.mean(np.abs(rx_dd) ** 2, axis=0)
         record = {
@@ -63,11 +69,13 @@ def main() -> None:
             "snr_db": int(row["snr_db"]),
             "velocity_kmh": int(row["velocity_kmh"]),
             "estimated_noise_power": estimate,
+            "selected_noise_delay_column": selected_col,
             "simulator_noise_power_for_offline_audit_only": truth,
             "ratio_estimated_to_true": estimate / truth,
             "relative_error": (estimate - truth) / truth,
             "absolute_log_error": abs(float(np.log(estimate / truth))),
             "true_path_delays_offline_audit_only": json.dumps(true_path_delays.tolist()),
+            "unique_true_path_delays_offline_audit_only": len(np.unique(true_path_delays)),
             "minimum_delay_column_power": float(column_power.min()),
             "minimum_delay_column_index": int(column_power.argmin()),
         }
@@ -82,7 +90,7 @@ def main() -> None:
                 "mean_received_power": float(power),
                 "simulator_noise_power_for_offline_audit_only": truth,
                 "power_to_noise_ratio": float(power / truth),
-                "contains_true_path_delay_offline_audit_only": bool(delay_index - ((int(run_config.otfs.M) - 1)//2) in true_path_delays),
+                "contains_true_path_delay_offline_audit_only": bool(delay_index - pilot_delay in true_path_delays),
             })
 
     results = pd.DataFrame(rows)
@@ -105,14 +113,15 @@ def main() -> None:
     summary = {
         "seed": args.seed,
         "test_frames": len(results),
-        "estimator": "sample mean of |rx_dd[:, pilot_delay]|^2",
-        "pilot_delay_index": (int(run_config.otfs.M) - 1) // 2,
-        "pilot_samples_per_frame": int(run_config.otfs.N),
+        "estimator": "minimum mean received power among pilot CE delay columns",
+        "pilot_ce_delay_indices": ce_delay_indices,
+        "pilot_samples_per_column": int(run_config.otfs.N),
         "inputs_used": ["rx_dd", "fixed public OTFS/pilot/channel configuration"],
         "simulator_noise_power_used_at_inference": False,
         "tx_dd_or_h_dd_used_at_inference": False,
         "simulator_noise_power_used_for_offline_audit_only": True,
-        "assumption_under_test": "single embedded pilot; positive channel delays [1,max_delay]; configured guard geometry isolates pilot-delay column from signal",
+        "assumption_under_test": "four or fewer channel paths occupy at most four of the five pilot CE delay columns; fractional Doppler spreads within a delay column",
+        "selected_noise_column_counts": results["selected_noise_delay_column"].value_counts().sort_index().to_dict(),
         "ratio_estimated_to_true": {
             "mean": float(ratios.mean()),
             "median": float(np.median(ratios)),
@@ -129,8 +138,8 @@ def main() -> None:
         "condition_results": condition.to_dict(orient="records"),
         "diagnostic_note": "Per-delay-column powers and true path delays are exported for offline diagnosis only; they are not inputs to the estimator.",
         "limitations": [
-            "Only 16 complex samples are available in the proposed column per frame, so per-frame noise estimates have sampling variance.",
-            "The noise-only-column assumption must be verified against actual channel support and the generated DD grid before integration.",
+            "Selecting the minimum among multiple noise-only delay columns can introduce downward selection bias.",
+            "Only 16 complex samples are available per selected column, so per-frame estimates have sampling variance.",
             "This experiment evaluates noise estimation, not receiver BER improvement. Receiver fine-tuning with estimated noise is a separate experiment.",
         ],
     }
