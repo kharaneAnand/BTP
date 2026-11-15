@@ -434,13 +434,10 @@ def main() -> None:
         estimated_models, estimated_generalist, test_inputs, device
     )
 
-    # Targets and true channel/noise are opened only after inference has completed.
+    # Validation targets are opened only after validation inference, to fit the router.
     val_labels = load_offline_labels(val_meta, raw_dir)
-    test_labels = load_offline_labels(test_meta, raw_dir)
     val_metrics = metrics_frame(val_predictions, val_labels)
-    test_metrics = metrics_frame(test_predictions, test_labels)
     val_metrics.to_csv(output / "validation_receiver_metrics.csv", index=False)
-    test_metrics.to_csv(output / "test_receiver_metrics.csv", index=False)
     test_features.to_csv(output / "test_router_features.csv", index=False)
     val_features.to_csv(output / "validation_router_features.csv", index=False)
 
@@ -454,21 +451,48 @@ def main() -> None:
     expanded_choice, expanded_pred, expanded_params = fit_shared_router(
         val_features, val_metrics, test_features, expanded_candidates
     )
+
+    # Execute the frozen test policy using received inputs only. No test labels are open.
+    selected_elapsed = []
+    static_elapsed = []
+    selected_receiver_counts = {}
+    with torch.no_grad():
+        for i, packed_cpu in enumerate(test_inputs):
+            packed = packed_cpu.unsqueeze(0).to(device)
+            t0 = time.perf_counter()
+            feature = shared_features(estimated_generalist, packed).cpu().numpy()[0]
+            receiver = predict_one(feature, expanded_params)
+            selected_receiver_counts[receiver] = selected_receiver_counts.get(receiver, 0) + 1
+            selected_output = estimated_models[receiver](packed).cpu().numpy()[0]
+            selected_elapsed.append(time.perf_counter() - t0)
+            reference_output = test_predictions[receiver][i]
+            if not np.allclose(selected_output, reference_output, rtol=1e-5, atol=1e-6):
+                raise AssertionError("Single-pass selected inference differs from offline candidate prediction.")
+
+            t1 = time.perf_counter()
+            _ = estimated_generalist(packed)
+            static_elapsed.append(time.perf_counter() - t1)
+
+    # Non-deployable oracle-noise generalist inference is also completed before labels are opened.
+    oracle_inputs = pack_inputs(test_meta, raw_dir, config, "oracle")
+    oracle_predictions, _ = infer_all_models(
+        {"oracle_noise_generalist": oracle_generalist},
+        oracle_generalist, oracle_inputs, device
+    )
+
+    # Only now open test targets, true channel and true noise for offline scoring.
+    test_labels = load_offline_labels(test_meta, raw_dir)
+    test_metrics = metrics_frame(test_predictions, test_labels)
+    oracle_metrics = metrics_frame(oracle_predictions, test_labels)
+    test_metrics.to_csv(output / "test_receiver_metrics.csv", index=False)
+    oracle_metrics.to_csv(output / "oracle_noise_reference_metrics.csv", index=False)
+
     velocity_result, velocity_policy = policy_result(
         velocity_choice, test_metrics, test_meta, args.seed
     )
     expanded_result, expanded_policy = policy_result(
         expanded_choice, test_metrics, test_meta, args.seed + 1
     )
-
-    # Non-deployable oracle-noise generalist reference.
-    oracle_inputs = pack_inputs(test_meta, raw_dir, config, "oracle")
-    oracle_predictions, _ = infer_all_models(
-        {"oracle_noise_generalist": oracle_generalist},
-        oracle_generalist, oracle_inputs, device
-    )
-    oracle_metrics = metrics_frame(oracle_predictions, test_labels)
-    oracle_metrics.to_csv(output / "oracle_noise_reference_metrics.csv", index=False)
 
     # Offline channel-estimation and noise-estimation audits, after decisions are frozen.
     channel_estimated_nmse = np.asarray([
