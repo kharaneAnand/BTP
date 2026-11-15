@@ -27,7 +27,7 @@ The receiver-side noise estimator:
 2. Computes received energy in each of the five pilot channel-estimation delay columns (pilot delay through pilot delay + max_delay).
 3. Selects the minimum-energy CE delay column. With four paths and five possible delay bins, at least one CE delay column has no path response under this simulator's delay-support construction.
 4. Uses the sample mean of the 16 complex Doppler-bin magnitudes squared as the raw complex noise-power estimate.
-5. Applies a single multiplicative calibration fitted on the training split only. Validation and test noise labels are not used to fit this calibration.
+5. Applies a single multiplicative calibration fitted on the training split only. In this simulation, the offline calibration uses training-split simulator noise labels; validation/test noise labels are not used to fit it, and no simulator noise value is passed as a per-frame inference input. A physical deployment would need this fixed scale calibrated from reference measurements or a known pilot/noise procedure rather than simulator labels.
 
 The estimated noise power is then used to reconstruct the pilot-derived channel matrix from `rx_dd`, using the fixed known pilot amplitude and a threshold of three times the estimated noise standard deviation. The V2 deployable receiver input is therefore `rx_dd`, estimated `h_hat`, and estimated noise power. It does not read `tx_dd`, `h_dd`, simulator SNR, simulator noise power or true channel paths.
 
