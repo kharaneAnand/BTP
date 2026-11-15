@@ -526,6 +526,28 @@ def main() -> None:
     test_metrics.to_csv(output / "test_receiver_metrics.csv", index=False)
     oracle_metrics.to_csv(output / "oracle_noise_reference_metrics.csv", index=False)
 
+    # Explicitly expose receiver complementarity in every held-out SNR/velocity cell.
+    condition_keys = test_meta[["snr_db", "velocity_kmh"]].reset_index(drop=True).assign(
+        sample_index=np.arange(len(test_meta))
+    )
+    condition_metrics = test_metrics.merge(
+        condition_keys, on="sample_index", how="left", validate="many_to_one"
+    )
+    condition_summary = condition_metrics.groupby(
+        ["snr_db", "velocity_kmh", "receiver"], as_index=False
+    ).agg(
+        ber_mean=("ber", "mean"),
+        ber_std=("ber", "std"),
+        ser_mean=("ser", "mean"),
+        ser_std=("ser", "std"),
+        nmse_mean=("nmse", "mean"),
+        nmse_std=("nmse", "std"),
+        frames=("sample_index", "nunique"),
+    )
+    condition_summary.to_csv(
+        output / "test_receiver_metrics_by_condition.csv", index=False
+    )
+
     velocity_result, velocity_policy = policy_result(
         velocity_choice, test_metrics, test_meta, args.seed
     )
