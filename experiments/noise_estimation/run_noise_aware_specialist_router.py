@@ -462,6 +462,8 @@ def main() -> None:
             t0 = time.perf_counter()
             feature = shared_features(estimated_generalist, packed).cpu().numpy()[0]
             receiver = predict_one(feature, expanded_params)
+            if receiver != expanded_choice[i]:
+                raise AssertionError("Single-pass router decision differs from batch router decision.")
             selected_receiver_counts[receiver] = selected_receiver_counts.get(receiver, 0) + 1
             selected_output = estimated_models[receiver](packed).cpu().numpy()[0]
             selected_elapsed.append(time.perf_counter() - t0)
