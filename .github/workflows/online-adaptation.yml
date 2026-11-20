@@ -1,0 +1,57 @@
+name: Causal self-supervised OAMP-DL online adaptation # guard-split-window-threshold-v4
+
+on:
+  push:
+    branches:
+      - "research/online-self-supervised-adaptation-mainline"
+    paths:
+      - "experiments/online_adaptation/**"
+      - ".github/workflows/online-adaptation.yml"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: online-adaptation-${{ github.workflow }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  online-adaptation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        seed: [49, 50, 51, 52]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install numerical dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install numpy pandas PyYAML scipy matplotlib textremo-toolbox
+          python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - name: Run causal online adaptation
+        env:
+          PYTHONPATH: .
+          OMP_NUM_THREADS: "2"
+          MKL_NUM_THREADS: "2"
+        run: |
+          python experiments/online_adaptation/run_online_adaptation.py \
+            --seed ${{ matrix.seed }} \
+            --device cpu \
+            --output-dir experiments/online_adaptation/results/seed${{ matrix.seed }}
+      - name: Upload online adaptation results
+        uses: actions/upload-artifact@v4
+        with:
+          name: online-adaptation-seed-${{ matrix.seed }}
+          path: |
+            experiments/online_adaptation/results/seed${{ matrix.seed }}/summary.json
+            experiments/online_adaptation/results/seed${{ matrix.seed }}/stream_metrics.csv
+          if-no-files-found: error
